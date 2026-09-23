@@ -1,0 +1,31 @@
+<!doctype html>
+<html lang="es"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Cómo funciona · PaperArk</title><link rel="stylesheet" href="/static/app.css"><script src="/static/i18n.js"></script>
+<style>.steps{counter-reset:s}.step{display:grid;grid-template-columns:44px 1fr;gap:14px;margin:18px 0}.step::before{counter-increment:s;content:counter(s);width:40px;height:40px;border-radius:50%;background:linear-gradient(135deg,var(--acc),var(--acc2));color:#fff;font-weight:800;display:grid;place-items:center}.step h3{margin:6px 0 4px}.step p{margin:0;color:var(--muted)}table{width:100%;border-collapse:collapse;font-size:14px}td,th{padding:8px 10px;border-bottom:1px solid var(--line);text-align:left}th{color:var(--muted);font-weight:600}</style></head>
+<body><div class="wrap">
+  <div class="top"><a class="brand" href="/"><span class="logo">P</span>PaperArk</a><nav><a href="/create">Crear</a><a href="/restore">Recuperar</a></nav></div>
+  <h1>Cómo funciona</h1>
+  <p class="lead">Un backup en papel que se lee con un escáner o con el móvil y sobrevive a manchas, dobleces, esquinas arrancadas y hojas perdidas.</p>
+  <section class="card"><h2>Por qué papel</h2>
+    <p>Un disco duro dura cinco años, un DVD quince, una nube lo que dure la empresa y tu contraseña. El papel sin ácido lleva siglos demostrando que aguanta: no se desmagnetiza, no necesita electricidad ni un lector que ya nadie fabrica, y se conserva en un cajón, una caja o una caja fuerte sin ningún mantenimiento. Para leerlo dentro de décadas basta con cualquier cámara y la descripción del formato que va impresa en la última hoja.</p></section>
+  <section class="card"><h2>Qué hay en cada hoja</h2>
+    <p>Cada hoja de datos es una rejilla de celdas negras y blancas: cada celda es un bit. Cuatro marcas en las esquinas y una retícula de unos mil marcadores pequeños permiten al lector reconstruir la geometría exacta aunque la foto esté girada, en perspectiva o el papel alabeado. La cabecera de cada hoja (número, total, huella SHA-256 de la hoja y del fichero) va repetida cuatro veces con una protección muy alta.</p>
+    <table><tr><th>Celda</th><th>Cómo recuperar</th><th>Capacidad por A4</th></tr>
+      <tr><td>0,13 mm (3 px)</td><td>escáner 600 dpi</td><td>257 KB</td></tr><tr><td>0,17 mm (4 px)</td><td>escáner 600 dpi (o móvil de 48 MP)</td><td>143 KB</td></tr>
+      <tr><td>0,21 mm (5 px)</td><td>escáner 300–600 dpi</td><td>91 KB</td></tr><tr><td>0,34 mm (8 px)</td><td>cámara del móvil ≥ 8 MP</td><td>34 KB</td></tr><tr><td>0,42 mm (10 px)</td><td>cualquier cámara</td><td>21 KB</td></tr></table>
+    <p class="note">Con corrección M (30 % de paridad). Los ficheros se comprimen antes, así que texto y documentos ocupan menos hojas.</p></section>
+  <section class="card"><h2>Por qué sobrevive</h2>
+    <p>Los datos van protegidos con códigos Reed-Solomon, los mismos que usan los CD, los discos duros y las sondas espaciales, y cada bloque se reparte por toda la hoja. Una mancha de café o una esquina arrancada quita un poco de cada bloque en lugar de destruir uno entero, y el lector lo reconstruye. Las zonas ilegibles se detectan y se declaran como "borrados", que cuestan la mitad de corregir. Con corrección M una hoja aguanta perder alrededor de un 15 % de su superficie a errores o un 23 % a zonas claramente destruidas.</p>
+    <p>Las hojas de paridad protegen entre hojas: con N hojas de paridad puedes perder cualesquiera N hojas enteras (o el equivalente en trozos ilegibles repartidos) y el fichero se reconstruye igual.</p></section>
+  <section class="card"><h2>Cómo se recupera</h2>
+    <div class="steps">
+      <div class="step"><div><h3>Abre la pantalla de recuperación</h3><p>Escanea el QR de la portada con la cámara del móvil, o entra en <a href="/restore">/restore</a>. El QR lleva el nombre del fichero, su tamaño, su huella y el número de hojas, así la pantalla sabe qué esperar desde el primer momento.</p></div></div>
+      <div class="step"><div><h3>Fotografía o escanea las hojas, en cualquier orden</h3><p>Hoja plana, bien iluminada y sin sombras duras. Cada hoja se identifica sola; los duplicados se ignoran y la pantalla te dice cuáles faltan. Desde el escritorio puedes continuar en el móvil con un QR de sesión.</p></div></div>
+      <div class="step"><div><h3>Descarga y verifica</h3><p>Cuando hay hojas suficientes, el fichero se reconstruye y se comprueba su SHA-256 contra el de la portada. Puedes volver a verificarlo cuando quieras en <a href="/verify/">/verify</a>.</p></div></div>
+    </div></section>
+  <section class="card"><h2>Y si dentro de 40 años no existe este programa</h2>
+    <p>La última hoja de cada backup describe el formato completo: geometría, marcadores, códigos, cabeceras y máscara, con el detalle necesario para escribir un lector nuevo en cualquier lenguaje. No hay nada propietario ni cifrado en el formato; si quieres confidencialidad, cifra el fichero antes de generar el backup.</p></section>
+  <section class="card"><h2>Cuidados del papel</h2>
+    <p>Imprime en láser (el tóner es plástico fundido; la tinta de inyección se desvanece y se corre), a tamaño real, sobre papel sin ácido (ISO 9706). Guarda las hojas planas, secas y a oscuras, sin grapas. Amarillear, doblarse o mancharse entra dentro de lo previsto.</p></section>
+  <footer><span class="credit">Vibe coded by <a href="https://www.linkedin.com/in/oriolegea/" target="_blank" rel="noopener">Oriol Egea</a> · <a href="/license">MIT license</a> · <a href="/how"><span class="long">Cómo funciona</span><span class="short" hidden>Guía</span></a> · <a href="https://github.com/oegea/paperark" target="_blank" rel="noopener">Código</a></span></footer>
+</div><script src="/static/fx.js" defer></script></body></html>

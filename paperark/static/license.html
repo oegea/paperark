@@ -1,0 +1,12 @@
+<!doctype html>
+<html lang="es"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Licencia · PaperArk</title><link rel="stylesheet" href="/static/app.css"><script src="/static/i18n.js"></script></head>
+<body><div class="wrap">
+  <div class="top"><a class="brand" href="/"><span class="logo">P</span>PaperArk</a><nav><a href="/create">Crear</a><a href="/restore">Recuperar</a><a href="/how"><span class="long">Cómo funciona</span><span class="short" hidden>Guía</span></a></nav></div>
+  <h1>Licencia MIT</h1>
+  <p class="lead">PaperArk es software libre: puedes usarlo, copiarlo, modificarlo y redistribuirlo, también con fines comerciales, conservando este aviso.</p>
+  <section class="card"><pre class="mono" style="white-space:pre-wrap;margin:0;font-size:13.5px;line-height:1.6" id="lic">Cargando…</pre></section>
+  <footer><span class="credit">Vibe coded by <a href="https://www.linkedin.com/in/oriolegea/" target="_blank" rel="noopener">Oriol Egea</a> · <a href="/license">MIT license</a> · <a href="/how"><span class="long">Cómo funciona</span><span class="short" hidden>Guía</span></a> · <a href="https://github.com/oegea/paperark" target="_blank" rel="noopener">Código</a></span></footer>
+</div>
+<script>fetch('/api/license').then(r=>r.text()).then(t=>{document.getElementById('lic').textContent=t});</script>
+<script src="/static/fx.js" defer></script></body></html>

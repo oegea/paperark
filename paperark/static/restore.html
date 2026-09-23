@@ -1,0 +1,154 @@
+<!doctype html>
+<html lang="es"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Recuperar · PaperArk</title><link rel="stylesheet" href="/static/app.css"><script src="/static/i18n.js"></script>
+<style>
+  .phases{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-bottom:16px}
+  .phase{background:var(--bg2);border:1px solid var(--line);border-radius:14px;padding:10px 12px;font-size:13px;color:var(--muted);display:flex;gap:8px;align-items:center;transition:.35s var(--ease)}
+  .phase b{display:grid;place-items:center;width:24px;height:24px;border-radius:50%;background:var(--line);color:var(--ink2);font-size:12px;flex:none;transition:.3s}
+  .phase.on{border-color:var(--acc);color:var(--ink);box-shadow:0 0 0 4px var(--acc-soft)}.phase.on b{background:var(--acc);color:#fff}
+  .phase.done{color:var(--ink)}.phase.done b{background:var(--ok);color:#fff}
+  @media (max-width:520px){.phase span{display:none}.phases{grid-template-columns:repeat(3,auto);justify-content:start}}
+  .file{display:grid;grid-template-columns:auto 1fr;gap:16px;align-items:center}
+  .ring{position:relative;width:96px;height:96px}.ring svg{transform:rotate(-90deg)}.ring circle{fill:none;stroke-width:8;stroke-linecap:round}
+  .ring .bg{stroke:var(--line)}.ring .fg{stroke:url(#g);stroke-dasharray:264;stroke-dashoffset:264;transition:stroke-dashoffset .9s var(--ease)}
+  .ring .pct{position:absolute;inset:0;display:grid;place-items:center;font-weight:800;font-size:20px;letter-spacing:-.5px}
+  .fname{font-size:clamp(20px,4.5vw,28px);font-weight:800;letter-spacing:-.5px;word-break:break-all;min-height:32px}
+  .desc{color:var(--ink2);font-size:14px;margin-top:2px}
+  .meta{display:flex;gap:8px;flex-wrap:wrap;margin-top:8px}
+  .sheets{display:grid;grid-template-columns:repeat(auto-fill,minmax(42px,1fr));gap:8px;margin-top:18px}
+  .sheet{aspect-ratio:1/1.25;border-radius:8px;background:var(--bg);border:1px solid var(--line);display:grid;place-items:center;font-size:12px;color:var(--muted);position:relative;transition:.35s var(--spring);font-weight:600}
+  .sheet.par{border-style:dashed}
+  .sheet.ok{background:var(--ok-soft);border-color:var(--ok);color:var(--ok);animation:flip .6s var(--ease)}
+  .sheet.rec{background:#e6f7f6;border-color:var(--acc2);color:var(--acc2)}
+  .sheet.part{background:var(--warn-soft);border-color:var(--warn);color:var(--warn)}
+  .sheet.busy{border-color:var(--acc);animation:pulse 1.1s infinite}
+  .sheet.ok::after{content:"✓";position:absolute;top:-6px;right:-6px;width:18px;height:18px;border-radius:50%;background:var(--ok);color:#fff;font-size:11px;display:grid;place-items:center;font-weight:900}
+  @keyframes flip{from{transform:rotateY(90deg)}to{transform:none}}
+  @keyframes pulse{0%,100%{box-shadow:0 0 0 0 rgba(79,70,229,.45)}50%{box-shadow:0 0 0 8px rgba(79,70,229,0)}}
+  .capture{margin-top:4px;display:grid;gap:10px}
+  .working{display:none;margin-top:12px;padding:12px 14px;border-radius:14px;background:var(--acc-soft);animation:rise .3s var(--ease)}
+  .working.show{display:block}
+  .working .st{display:flex;justify-content:space-between;font-size:14px;color:var(--ink);margin-bottom:8px;gap:10px}
+  .queue{margin-top:12px;display:flex;flex-direction:column;gap:6px}
+  .item{display:flex;align-items:center;gap:10px;padding:10px 12px;border-radius:12px;background:var(--bg);border:1px solid var(--line);font-size:14px;animation:slide .35s var(--ease)}
+  @keyframes slide{from{opacity:0;transform:translateX(-10px)}to{opacity:1;transform:none}}
+  .item .dot{width:10px;height:10px;border-radius:50%;background:var(--muted);flex:none}
+  .item.accepted .dot,.item.cover .dot{background:var(--ok)}.item.partial .dot{background:var(--warn)}.item.rejected .dot{background:var(--bad)}.item.busy .dot{background:var(--acc);animation:pulse 1s infinite}
+  .item .src{color:var(--muted);font-size:12px;margin-left:auto;white-space:nowrap}
+  .done{display:none;text-align:center;padding:22px 10px 8px}.done.show{display:block;animation:rise .6s var(--ease)}
+  .phone{display:flex;gap:14px;align-items:center;margin-top:14px;flex-wrap:wrap;padding:12px;border:1px dashed var(--line2);border-radius:14px}
+  .hint{font-size:14px;color:var(--muted);flex:1;min-width:200px}
+  .missing{margin-top:10px;font-size:14px;color:var(--ink2)}.missing b{color:var(--warn)}
+  .status-line{margin-top:8px;min-height:22px;color:var(--muted);font-size:14px}
+</style></head>
+<body><div class="wrap">
+  <div class="top"><a class="brand" href="/"><span class="logo">P</span>PaperArk</a><nav><a href="/create">Crear</a><a href="/restore" class="on">Recuperar</a><a href="/how"><span class="long">Cómo funciona</span><span class="short" hidden>Guía</span></a></nav></div>
+  <div class="phases"><div class="phase on" id="ph1"><b>1</b><span>Identificar el backup</span></div><div class="phase" id="ph2"><b>2</b><span>Capturar las hojas</span></div><div class="phase" id="ph3"><b>3</b><span>Descargar y verificar</span></div></div>
+
+  <section class="card">
+    <div class="file">
+      <div class="ring"><svg width="96" height="96" viewBox="0 0 96 96"><defs><linearGradient id="g" x1="0" x2="1"><stop offset="0" stop-color="#4f46e5"/><stop offset="1" stop-color="#0ea5a3"/></linearGradient></defs><circle class="bg" cx="48" cy="48" r="42"/><circle class="fg" id="ringFg" cx="48" cy="48" r="42"/></svg><div class="pct" id="pct">0%</div></div>
+      <div>
+        <div class="fname skel" id="fname">Esperando la portada o la primera hoja…</div>
+        <div class="desc" id="desc"></div>
+        <div class="meta" id="meta"><span class="pill skel">— hojas</span><span class="pill skel">— KB</span></div>
+        <div class="status-line" id="statusLine">Escanea el QR de la portada, fotografía las hojas o arrástralas aquí. En cualquier orden.</div>
+      </div>
+    </div>
+    <div class="sheets" id="sheets"></div>
+    <div class="missing" id="missing"></div>
+    <div class="done" id="done">
+      <div class="check">✓</div>
+      <h2>Fichero reconstruido y verificado</h2>
+      <p class="muted" id="doneSub"></p>
+      <button class="btn ok lg" id="btnGet">Descargar el fichero</button>
+      <p class="note mono" id="doneSha" style="word-break:break-all"></p>
+    </div>
+  </section>
+
+  <section class="card">
+    <div class="capture">
+      <button class="btn primary lg" id="btnCam">📷 Fotografiar una hoja</button>
+      <input type="file" id="cam" accept="image/*" capture="environment">
+      <button class="btn ghost" id="btnFiles">Subir escaneos o fotos (varios) · PNG, JPG, PDF</button>
+      <input type="file" id="files" accept="image/*,.pdf,application/pdf" multiple>
+      <button class="btn ghost" id="btnQr">Leer el QR de la portada con la cámara</button>
+      <input type="file" id="qrcam" accept="image/*" capture="environment">
+    </div>
+    <div class="drop" id="drop"><span class="big">🗂️</span>…o arrastra aquí las imágenes o el PDF del escáner</div>
+    <div class="working" id="working"><div class="st"><span id="wstage">Procesando…</span><span id="wpct" class="mono">0%</span></div><div class="bar"><i id="wbar"></i></div></div>
+    <div class="phone" id="phone" hidden>
+      <div class="qr"><img id="phoneQr" alt="QR"></div>
+      <div class="hint"><b style="color:var(--ink)">Continuar en el móvil</b><br>Escanea este código con la cámara del móvil: abre esta misma sesión para fotografiar las hojas. Lo que hagas allí aparece aquí al instante.</div>
+    </div>
+    <div class="toggle"><input type="checkbox" id="strict"><label for="strict" style="margin:0">Modo estricto (exigir orden de escaneo)</label>
+      <button class="btn ghost" id="btnLost" style="margin-left:auto;padding:8px 12px;min-height:0" hidden>Marcar hoja esperada como perdida</button></div>
+    <div class="queue" id="queue"></div>
+  </section>
+  <footer><span class="credit">Vibe coded by <a href="https://www.linkedin.com/in/oriolegea/" target="_blank" rel="noopener">Oriol Egea</a> · <a href="/license">MIT license</a> · <a href="/how"><span class="long">Cómo funciona</span><span class="short" hidden>Guía</span></a> · <a href="https://github.com/oegea/paperark" target="_blank" rel="noopener">Código</a> · <span id="sidLabel" class="mono"></span></span></footer>
+</div>
+<div class="toast" id="toast"></div><div class="confetti" id="confetti"></div>
+<script>
+const $=s=>document.querySelector(s);
+let sid=null, st=null, busy=0, lastUpdated=0; const T=(s,v)=>I18N.t(s,v); const LQ='?lang='+I18N.lang;
+const params=new URLSearchParams(location.search);
+const hashMeta=(location.hash.match(/m=([^&]+)/)||[])[1];
+function fmt(n){return n==null?'—':n<1024?n+' B':n<1048576?(n/1024).toFixed(1)+' KB':(n/1048576).toFixed(2)+' MB'}
+function toast(t){const e=$('#toast');e.textContent=t;e.classList.add('show');clearTimeout(e._t);e._t=setTimeout(()=>e.classList.remove('show'),2600)}
+async function init(){
+  if(params.get('s')){ sid=params.get('s'); try{ st=await (await fetch('/api/restore/'+sid+LQ)).json(); }catch(e){} }
+  if(!st || st.detail){ const fd=new FormData(); fd.append('strict',$('#strict').checked); fd.append('lang',I18N.lang); if(hashMeta) fd.append('meta',hashMeta);
+    const j=await (await fetch('/api/restore/session',{method:'POST',body:fd})).json(); sid=j.session; st=j.status; history.replaceState(null,'',`/restore?s=${sid}`); if(hashMeta) toast(T('Portada leída desde el QR')); }
+  else if(hashMeta){ const fd=new FormData(); fd.append('meta',hashMeta); await fetch(`/api/restore/${sid}/meta`,{method:'POST',body:fd}); st=await (await fetch('/api/restore/'+sid+LQ)).json(); }
+  $('#sidLabel').textContent=T('sesión')+' '+sid;
+  const info=await (await fetch('/api/info')).json();
+  if(!/Mobi|Android|iPhone|iPad/i.test(navigator.userAgent)){ $('#phone').hidden=false; $('#phoneQr').src='/api/qr?text='+encodeURIComponent(`${info.base_url}/restore?s=${sid}`); }
+  render(st); poll();
+}
+async function poll(){ try{ const s=await (await fetch('/api/restore/'+sid+LQ)).json(); if(!s.detail && s.updated!==lastUpdated) render(s); }catch(e){} setTimeout(poll, busy||(st&&st.current)?700:2500); }
+function phases(s){ const p1=s.started, p2=s.started&&(s.accepted.length>0||s.partial.length>0), p3=s.complete;
+  $('#ph1').className='phase '+(p1?'done':'on'); $('#ph2').className='phase '+(p3?'done':p1?'on':''); $('#ph3').className='phase '+(p3?'on':''); }
+function render(s){
+  st=s; lastUpdated=s.updated;
+  const w=$('#working'); if(s.current){ w.classList.add('show'); $('#wstage').textContent=(s.current.source?s.current.source+' · ':'')+s.current.stage; $('#wpct').textContent=s.current.pct+'%'; $('#wbar').style.width=s.current.pct+'%'; } else { w.classList.remove('show'); $('#wbar').style.width='0'; }
+  if(!s.started) return;
+  phases(s);
+  $('#fname').classList.remove('skel'); $('#fname').textContent=s.filename||'—'; $('#desc').textContent=s.description||'';
+  const okData=s.accepted.filter(i=>i<s.data_pages).length, okPar=s.accepted.length-okData;
+  const pct=s.complete?100:Math.round(100*okData/s.data_pages);
+  $('#ringFg').style.strokeDashoffset=264-264*pct/100; $('#pct').textContent=pct+'%';
+  $('#meta').innerHTML=`<span class="pill">${T('{t} hojas · {d} datos + {p} paridad',{t:s.total_pages,d:s.data_pages,p:s.parity_pages})}</span><span class="pill">${fmt(s.file_size)}</span><span class="pill mono">${(s.file_sha256||'').slice(0,12)}…</span>${s.from_cover?'<span class="pill warn">'+T('según la portada')+'</span>':'<span class="pill ok">'+T('confirmado por las hojas')+'</span>'}`;
+  let line=T('Leídas {a} de {b} hojas de datos',{a:okData,b:s.data_pages}); if(s.parity_pages) line+=T(' y {a} de {b} de paridad',{a:okPar,b:s.parity_pages}); if(s.partial.length) line+=T(' · parciales: {list}',{list:s.partial.map(i=>i+1).join(', ')}); if(s.strict) line+=T(' · siguiente: hoja {n}',{n:s.expected+1});
+  $('#statusLine').textContent=line;
+  const S=$('#sheets'); if(S.children.length!==s.total_pages){ S.innerHTML=''; for(let i=0;i<s.total_pages;i++){const e=document.createElement('div');e.className='sheet'+(i>=s.data_pages?' par':'');e.textContent=i+1;e.title=i>=s.data_pages?T('paridad'):T('datos');S.appendChild(e);} }
+  [...S.children].forEach((e,i)=>{ const isPar=i>=s.data_pages; let cls='sheet'+(isPar?' par':''); if(s.accepted.includes(i)) cls+=' ok'; else if(s.partial.includes(i)) cls+=' part'; else if(s.complete&&!isPar) cls+=' rec'; if(e.classList.contains('busy')) cls+=' busy'; if(e.className!==cls) e.className=cls; });
+  const g=(s.recovery.groups||[]).filter(x=>x.needs_recovery&&!x.ok); const miss=s.missing_data.map(i=>i+1);
+  $('#missing').innerHTML = s.complete ? (miss.length||s.partial.length?'<b style="color:var(--acc2)">'+T('Faltan {n} hoja(s) de datos, pero la paridad permite reconstruirlas.',{n:miss.length})+'</b>':'')
+    : miss.length ? T('Faltan las hojas {list}',{list:'<b>'+miss.slice(0,30).join(', ')+(miss.length>30?'…':'')+'</b>'})+(s.parity_pages?T(' · con paridad bastan {n} hoja(s) más de datos o paridad',{n:g.reduce((a,x)=>a+x.still_needed,0)}):'') : '';
+  $('#btnLost').hidden=!(s.strict&&s.parity_pages>0&&!s.complete);
+  if(s.complete&&!$('#done').classList.contains('show')){ $('#done').classList.add('show'); $('#doneSub').textContent=`${s.filename} · ${fmt(s.file_size)}${miss.length||s.partial.length?T(' · reconstruido con paridad'):''}`; $('#doneSha').textContent=T('SHA-256 esperado {h}',{h:s.file_sha256}); confetti(); }
+}
+function addItem(cls,text,src){const q=$('#queue');const e=document.createElement('div');e.className='item '+cls;e.innerHTML=`<span class="dot"></span><span></span><span class="src"></span>`;e.children[1].textContent=text;e.children[2].textContent=src||'';q.prepend(e);while(q.children.length>60)q.lastChild.remove();return e;}
+let busySheet=null; function mark(){ if(!st||!st.started)return; const S=$('#sheets'); const i=st.missing_data.find(i=>!st.partial.includes(i)); if(i!=null&&S.children[i]){busySheet=S.children[i];busySheet.classList.add('busy');} }
+function unmark(){ if(busySheet){busySheet.classList.remove('busy');busySheet=null;} }
+async function upload(files){
+  for(const f of files){ busy++; const it=addItem('busy',T('Leyendo {name}…',{name:f.name||T('foto')}),fmt(f.size)); mark();
+    $('#working').classList.add('show'); $('#wstage').textContent=(f.name||T('foto'))+' · '+T('subiendo'); $('#wpct').textContent='0%'; $('#wbar').style.width='3%';
+    const fd=new FormData(); fd.append('file',f,f.name||'foto.jpg');
+    try{ const r=await fetch(`/api/restore/${sid}/page`,{method:'POST',body:fd});
+      if(!r.ok){ it.className='item rejected'; it.children[1].textContent=(await r.json()).detail||'error'; }
+      else{ const j=await r.json(); it.remove(); for(const rep of j.reports){ addItem(rep.status, rep.message, rep.source||f.name); if(rep.status==='accepted'||rep.status==='cover') toast(rep.message); } render(j.status); }
+    }catch(e){ it.className='item rejected'; it.children[1].textContent=T('Error de red: {e}',{e}); }
+    busy--; unmark(); if(!busy){$('#working').classList.remove('show');} }
+}
+$('#btnCam').onclick=()=>$('#cam').click(); $('#cam').onchange=e=>{upload([...e.target.files]);e.target.value='';};
+$('#btnFiles').onclick=()=>$('#files').click(); $('#files').onchange=e=>{upload([...e.target.files]);e.target.value='';};
+$('#btnQr').onclick=()=>$('#qrcam').click(); $('#qrcam').onchange=e=>{upload([...e.target.files]);e.target.value='';};
+const d=$('#drop'); d.onclick=()=>$('#files').click(); d.ondragover=e=>{e.preventDefault();d.classList.add('over')}; d.ondragleave=()=>d.classList.remove('over'); d.ondrop=e=>{e.preventDefault();d.classList.remove('over');upload([...e.dataTransfer.files]);};
+$('#btnLost').onclick=async()=>{const j=await (await fetch(`/api/restore/${sid}/lost`,{method:'POST',body:new FormData()})).json(); addItem(j.report.status,j.report.message); render(j.status);};
+$('#strict').onchange=()=>{ location.href='/restore'+($('#strict').checked?'?strict=1':''); };
+if(params.get('strict')){ $('#strict').checked=true; }
+$('#btnGet').onclick=async()=>{ const r=await fetch(`/api/restore/${sid}/file`); if(!r.ok){toast((await r.json()).detail);return;} const b=await r.blob(); const a=document.createElement('a'); a.href=URL.createObjectURL(b); a.download=(r.headers.get('Content-Disposition')||'').match(/filename="(.+)"/)?.[1]||'restaurado.bin'; a.click(); $('#ph3').className='phase done'; $('#doneSha').innerHTML=T('Descargado · SHA-256 verificado')+' <code>'+r.headers.get('X-Sha256')+'</code> · <a href="/verify/'+r.headers.get('X-Sha256')+'">'+T('comprobar de nuevo')+'</a>'; };
+function confetti(){ const c=$('#confetti'); const cols=['#4f46e5','#0ea5a3','#16a34a','#f59e0b','#ef4444','#a78bfa']; for(let i=0;i<100;i++){const e=document.createElement('i');e.style.left=Math.random()*100+'vw';e.style.background=cols[i%cols.length];e.style.animationDelay=(Math.random()*.9)+'s';e.style.transform=`rotate(${Math.random()*360}deg)`;c.appendChild(e);setTimeout(()=>e.remove(),3600);} }
+init();
+</script><script src="/static/fx.js" defer></script></body></html>

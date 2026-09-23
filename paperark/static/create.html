@@ -1,0 +1,210 @@
+<!doctype html>
+<html lang="es"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Crear backup · PaperArk</title><link rel="stylesheet" href="/static/app.css"><script src="/static/i18n.js"></script>
+<style>
+  .filecard{display:flex;gap:14px;align-items:center;padding:14px;border:1px solid var(--line);border-radius:16px;background:var(--bg);margin-top:12px;animation:rise .4s var(--ease)}
+  .filecard .ic{width:46px;height:46px;border-radius:12px;background:var(--acc-soft);display:grid;place-items:center;font-size:22px;flex:none}
+  .filecard b{display:block;word-break:break-all}.filecard span{font-size:13px;color:var(--muted)}
+  .filecard .x{margin-left:auto;background:none;border:0;font-size:20px;color:var(--muted);cursor:pointer}
+  .preview{display:grid;grid-template-columns:1fr 1fr;gap:18px;align-items:start}
+  @media (max-width:680px){.preview{grid-template-columns:1fr}}
+  .cover{background:#fff;border:1px solid var(--line2);border-radius:6px;aspect-ratio:210/297;padding:7% 7%;box-shadow:0 30px 50px -30px rgba(0,0,0,.35);position:relative;overflow:hidden;font-size:9px;color:#222;transform:rotate(-1.2deg);transition:transform .4s var(--spring);display:flex;flex-direction:column;gap:2.2%}
+  .cover:hover{transform:rotate(0) scale(1.02)}
+  .cover .h{font-size:6px;letter-spacing:.5px;color:#555;border-bottom:2px solid #111;padding-bottom:5px;display:flex;justify-content:space-between}
+  .cover .t{font-size:5.5px;color:#444}
+  .cover .n{font-weight:800;font-size:15px;line-height:1.05;letter-spacing:-.3px;word-break:break-all;color:#111}
+  .cover .d{font-size:6.5px;color:#333;line-height:1.35;display:-webkit-box;-webkit-line-clamp:3;-webkit-box-orient:vertical;overflow:hidden}
+  .cover .m{font-size:5.5px;color:#444}
+  .cover .mid{display:grid;grid-template-columns:1fr 30%;gap:6%;align-items:start;border-top:1.5px solid #111;padding-top:3%}
+  .cover .st{font-size:5.2px;color:#333;line-height:1.55}
+  .cover .st b{display:block;font-size:6.8px;margin-bottom:3px;color:#111}
+  .cover .q{width:100%;aspect-ratio:1;image-rendering:pixelated;border:1px solid #ddd}
+  .cover .sh{border-top:1.5px solid #111;padding-top:3%;font-family:ui-monospace,Menlo,monospace;font-size:5px;letter-spacing:.3px;color:#111;line-height:1.55}
+  .cover .sh b{font-family:Inter,sans-serif;font-size:6.2px}
+  .cover .ix{border-top:1.5px solid #111;padding-top:3%;font-family:ui-monospace,Menlo,monospace;font-size:4.6px;color:#444;line-height:1.6;columns:2;column-gap:6%}
+  .cover .ft{margin-top:auto;border-top:1px solid #111;padding-top:3px;font-size:4.5px;color:#555}
+  .sum h3{margin-top:10px}
+  .sum .stat{margin-top:8px}
+  .warnbox{margin-top:12px;padding:12px 14px;border-radius:12px;background:var(--warn-soft);color:#7c4a03;font-size:14px;display:none}
+  .warnbox.show{display:block;animation:rise .4s var(--ease)}
+  details{margin-top:16px;border:1px solid var(--line);border-radius:14px;padding:10px 14px;background:var(--bg)}
+  summary{cursor:pointer;font-weight:600;font-size:14px;color:var(--ink2)}
+  .gen{display:none;text-align:center;padding:10px 0}
+  .gen.show{display:block;animation:rise .5s var(--ease)}
+  .gen .pct{font-size:56px;font-weight:800;letter-spacing:-2px;line-height:1;margin:6px 0}
+  .gen .stage{color:var(--muted);min-height:22px}
+  .pages{display:flex;gap:5px;flex-wrap:wrap;justify-content:center;margin:14px 0}
+  .pages i{width:14px;height:19px;border-radius:3px;background:var(--line);transition:.3s var(--spring)}
+  .pages i.on{background:linear-gradient(135deg,var(--acc),var(--acc2));transform:translateY(-3px)}
+  .checklist{text-align:left;margin:18px auto 0;max-width:460px}
+  .checklist label{display:grid;grid-template-columns:20px 1fr;gap:10px;align-items:start;font-size:14.5px;color:var(--ink2);margin:8px 0;cursor:pointer}
+  .checklist input{margin-top:3px;accent-color:var(--ok)}
+  .checklist span{display:block}
+</style></head>
+<body><div class="wrap">
+  <div class="top"><a class="brand" href="/"><span class="logo">P</span>PaperArk</a><nav><a href="/create" class="on">Crear</a><a href="/restore">Recuperar</a><a href="/how"><span class="long">Cómo funciona</span><span class="short" hidden>Guía</span></a></nav></div>
+  <div class="steps-nav" id="nav"><span class="on"></span><span></span><span></span><span></span><span></span></div>
+
+  <!-- PASO 1 -->
+  <section class="card stepv" id="s1">
+    <div class="kicker">Paso 1 de 5</div><h2>¿Qué quieres guardar?</h2>
+    <p class="muted">Cualquier fichero. Si son varios, comprímelos antes en un ZIP. Si es confidencial, cífralo antes: el papel no guarda secretos por sí solo.</p>
+    <div class="drop" id="drop"><span class="big">📄</span>Arrastra el fichero aquí o toca para elegirlo<input type="file" id="file"></div>
+    <div id="fileInfo"></div>
+    <label for="desc">Descripción para la portada <span class="muted">(opcional, pero tu yo del futuro lo agradecerá)</span></label>
+    <textarea id="desc" maxlength="600" placeholder="Ej.: Claves de recuperación de la cartera y copia del testamento digital. Generado en casa el 23/09/2026. Contraseña del ZIP: la de siempre."></textarea>
+    <label for="pdflang">Idioma del PDF</label>
+    <select id="pdflang" style="max-width:240px"><option value="es">Español</option><option value="en">English</option></select>
+    <div class="nav-btns"><span></span><button class="btn primary" id="n1" disabled>Continuar →</button></div>
+  </section>
+
+  <!-- PASO 2 -->
+  <section class="card stepv" id="s2" hidden>
+    <div class="kicker">Paso 2 de 5</div><h2>¿Cómo vas a recuperarlo?</h2>
+    <p class="muted">Esto decide el tamaño de las celdas impresas y, por tanto, cuántas hojas ocupará.</p>
+    <div class="opts" data-q="recover">
+      <div class="opt" data-v="phone"><span class="tag">recomendado</span><span class="tick">✓</span><span class="ic">📱</span><h3>Con el móvil</h3><p>Fotografiando cada hoja. Cualquier cámara de 8 MP o más. Unos 34 KB por hoja.</p></div>
+      <div class="opt" data-v="scanner"><span class="tick">✓</span><span class="ic">🖨️</span><h3>Con un escáner</h3><p>A 600 dpi. Cuatro veces más denso: unos 143 KB por hoja.</p></div>
+      <div class="opt" data-v="unsure"><span class="tick">✓</span><span class="ic">🛡️</span><h3>No lo sé, lo más seguro</h3><p>Celdas grandes que lee cualquier cámara o escáner, incluso mediocres. Unos 21 KB por hoja.</p></div>
+    </div>
+    <div class="nav-btns"><button class="btn ghost" data-back="1">← Atrás</button><button class="btn primary" id="n2" disabled>Continuar →</button></div>
+  </section>
+
+  <!-- PASO 3 -->
+  <section class="card stepv" id="s3" hidden>
+    <div class="kicker">Paso 3 de 5</div><h2>¿Cómo vas a imprimirlo?</h2>
+    <p class="muted">El tóner láser es plástico fundido y dura siglos; la tinta se corre y se desvanece.</p>
+    <div class="opts" data-q="print">
+      <div class="opt" data-v="laser"><span class="tag">recomendado</span><span class="tick">✓</span><span class="ic">⚡</span><h3>Impresora láser</h3><p>La opción ideal. Desactiva el ahorro de tóner y cualquier "ajustar a página".</p></div>
+      <div class="opt" data-v="inkjet"><span class="tick">✓</span><span class="ic">💧</span><h3>Inyección de tinta</h3><p>Funciona, pero subimos el tamaño de celda y la corrección para compensar el sangrado de la tinta.</p></div>
+      <div class="opt" data-v="shop"><span class="tick">✓</span><span class="ic">🏪</span><h3>Copistería / imprenta</h3><p>Perfecto si pides impresión láser al 100 % de escala, sin márgenes automáticos.</p></div>
+    </div>
+    <div class="nav-btns"><button class="btn ghost" data-back="2">← Atrás</button><button class="btn primary" id="n3" disabled>Continuar →</button></div>
+  </section>
+
+  <!-- PASO 4 -->
+  <section class="card stepv" id="s4" hidden>
+    <div class="kicker">Paso 4 de 5</div><h2>¿Cuánto tiempo debe durar?</h2>
+    <p class="muted">Más protección significa más hojas: corrección dentro de cada hoja y hojas de paridad que permiten perder hojas enteras.</p>
+    <div class="opts" data-q="life">
+      <div class="opt" data-v="years"><span class="tick">✓</span><span class="ic">🗓️</span><h3>Unos años</h3><p>Protección estándar y una hoja de paridad. Para copias de trabajo.</p></div>
+      <div class="opt" data-v="decades"><span class="tag">recomendado</span><span class="tick">✓</span><span class="ic">🏠</span><h3>Décadas</h3><p>Protección estándar y un 20 % de hojas de paridad. Sobrevive a manchas, dobleces y a perder una de cada cinco hojas.</p></div>
+      <div class="opt" data-v="generations"><span class="tick">✓</span><span class="ic">🏛️</span><h3>Generaciones</h3><p>Protección alta y un 35 % de hojas de paridad. Para lo que no puede perderse.</p></div>
+    </div>
+    <div class="nav-btns"><button class="btn ghost" data-back="3">← Atrás</button><button class="btn primary" id="n4" disabled>Ver resumen →</button></div>
+  </section>
+
+  <!-- PASO 5 -->
+  <section class="card stepv" id="s5" hidden>
+    <div class="kicker">Paso 5 de 5</div><h2>Tu backup</h2>
+    <div class="preview">
+      <div class="cover" id="cover">
+        <div class="h"><span>PAPERARK · COPIA DE SEGURIDAD EN PAPEL</span><span id="cvDate"></span></div>
+        <div class="t">Este documento contiene el fichero</div>
+        <div class="n" id="cvName">fichero.zip</div>
+        <div class="d" id="cvDesc"></div>
+        <div class="m" id="cvMeta"></div>
+        <div class="mid"><div class="st"><b>Cómo recuperar el fichero</b>1 · Escanea el QR con la cámara del móvil<br>2 · Fotografía o escanea cada hoja, en cualquier orden<br>3 · Descarga el fichero y comprueba su huella</div><img class="q" src="/api/qr?text=https://paperark/restore" alt=""></div>
+        <div class="sh"><b>Huella SHA-256 del fichero original</b><br>se calcula al generar el PDF<br>········ ········ ········ ········</div>
+        <div class="ix" id="cvIndex"></div>
+        <div class="ft">Formato PAPERARK v1 · la última hoja contiene la especificación completa del formato</div>
+      </div>
+      <div class="sum">
+        <div class="stat" id="stat"><div><b class="skel">—</b>hojas</div><div><b class="skel">—</b>KB por hoja</div><div><b class="skel">—</b>de paridad</div></div>
+        <h3>Ajustes elegidos</h3>
+        <div id="chosen" class="muted" style="font-size:14px"></div>
+        <div class="warnbox" id="warn"></div>
+        <details><summary>Ajustes avanzados</summary>
+          <div class="row">
+            <div><label>Celda (px a 600 dpi)</label><select id="cell"><option value="3">3 · 0,13 mm</option><option value="4">4 · 0,17 mm</option><option value="5">5 · 0,21 mm</option><option value="6">6 · 0,25 mm</option><option value="8">8 · 0,34 mm</option><option value="10">10 · 0,42 mm</option></select></div>
+            <div><label>Corrección por hoja</label><select id="ecc"><option value="L">L · 19 %</option><option value="M">M · 30 %</option><option value="H">H · 42 %</option><option value="X">X · 55 %</option></select></div>
+            <div><label>Hojas de paridad</label><input type="number" id="parity" min="0" max="120" value="2"></div>
+            <div><label>Papel</label><select id="paper"><option value="A4">A4</option><option value="LETTER">Letter</option></select></div>
+          </div>
+          <div class="toggle"><input type="checkbox" id="compress" checked><label for="compress" style="margin:0">Comprimir (zstd)</label></div>
+          <div class="toggle"><input type="checkbox" id="cover_on" checked><label for="cover_on" style="margin:0">Portada, explicación y especificación del formato</label></div>
+        </details>
+      </div>
+    </div>
+    <div class="nav-btns" id="genBtns"><button class="btn ghost" data-back="4">← Atrás</button><button class="btn primary lg" id="btnGen">Generar el PDF</button></div>
+    <div class="gen" id="gen">
+      <div class="pct" id="gpct">0%</div>
+      <div class="bar"><i id="gbar"></i></div>
+      <div class="pages" id="gpages"></div>
+      <div class="stage" id="gstage">Preparando…</div>
+    </div>
+    <div class="gen" id="done">
+      <div class="check">✓</div>
+      <h2>PDF generado</h2>
+      <p class="muted" id="doneSub"></p>
+      <button class="btn ok lg" id="btnDl">Descargar el PDF</button>
+      <div class="stat" id="doneStat"></div>
+      <p class="note mono" id="doneSha" style="word-break:break-all"></p>
+      <div class="checklist">
+        <label><input type="checkbox"><span>Imprimir en láser, a tamaño real (100 %), sin "ajustar a página" ni ahorro de tóner</span></label>
+        <label><input type="checkbox"><span>Papel sin ácido (ISO 9706) de 90 g o más</span></label>
+        <label><input type="checkbox"><span>Comprobar una hoja: fotografiarla en <a href="/restore">Recuperar</a> y ver que se lee con margen</span></label>
+        <label><input type="checkbox"><span>Guardar la portada junto a las hojas, planas, secas y a oscuras</span></label>
+      </div>
+      <p class="note"><a href="/create">Crear otro backup</a></p>
+    </div>
+  </section>
+<footer><span class="credit">Vibe coded by <a href="https://www.linkedin.com/in/oriolegea/" target="_blank" rel="noopener">Oriol Egea</a> · <a href="/license">MIT license</a> · <a href="/how"><span class="long">Cómo funciona</span><span class="short" hidden>Guía</span></a> · <a href="https://github.com/oegea/paperark" target="_blank" rel="noopener">Código</a></span></footer>
+</div>
+<div class="toast" id="toast"></div>
+<script>
+const $=s=>document.querySelector(s), $$=s=>[...document.querySelectorAll(s)];
+const A={file:null, recover:null, print:null, life:null}; const T=(s,v)=>I18N.t(s,v); $('#pdflang').value=I18N.lang;
+let step=1;
+function fmt(n){return n==null?'—':n<1024?n+' B':n<1048576?(n/1024).toFixed(1)+' KB':(n/1048576).toFixed(2)+' MB'}
+function toast(t){const e=$('#toast');e.textContent=t;e.classList.add('show');clearTimeout(e._t);e._t=setTimeout(()=>e.classList.remove('show'),2400)}
+function go(n,back){ $$('section.stepv').forEach(s=>{s.hidden=true;s.classList.remove('back')}); const s=$('#s'+n); s.hidden=false; if(back)s.classList.add('back'); s.style.animation='none'; s.offsetHeight; s.style.animation=''; step=n;
+  $$('#nav span').forEach((e,i)=>{e.className=i+1<n?'done':i+1===n?'on':''}); window.scrollTo({top:0,behavior:'smooth'}); if(n===5) summary(); }
+$$('[data-back]').forEach(b=>b.onclick=()=>go(+b.dataset.back,true));
+// paso 1
+function setFile(f){ A.file=f; $('#fileInfo').innerHTML=`<div class="filecard"><span class="ic">${icon(f.name)}</span><div><b>${f.name}</b><span>${fmt(f.size)} · ${f.type||T('tipo desconocido')}</span></div><button class="x" title="${T('Quitar')}">×</button></div>`; $('#fileInfo .x').onclick=()=>{A.file=null;$('#fileInfo').innerHTML='';$('#n1').disabled=true;}; $('#n1').disabled=false; }
+function icon(n){const e=(n.split('.').pop()||'').toLowerCase();return {zip:'🗜️',gz:'🗜️','7z':'🗜️',pdf:'📕',txt:'📝',md:'📝',jpg:'🖼️',jpeg:'🖼️',png:'🖼️',key:'🔑',asc:'🔑',gpg:'🔐',json:'🧩',csv:'📊',xlsx:'📊',docx:'📄'}[e]||'📄'}
+const d=$('#drop'),fi=$('#file'); d.onclick=()=>fi.click(); fi.onchange=()=>{if(fi.files[0])setFile(fi.files[0]);}; d.ondragover=e=>{e.preventDefault();d.classList.add('over')}; d.ondragleave=()=>d.classList.remove('over'); d.ondrop=e=>{e.preventDefault();d.classList.remove('over');if(e.dataTransfer.files[0])setFile(e.dataTransfer.files[0]);};
+$('#n1').onclick=()=>go(2);
+// opciones
+$$('.opts').forEach(g=>{ const q=g.dataset.q; g.querySelectorAll('.opt').forEach(o=>o.onclick=()=>{ g.querySelectorAll('.opt').forEach(x=>x.classList.remove('sel')); o.classList.add('sel'); A[q]=o.dataset.v; const n={recover:'#n2',print:'#n3',life:'#n4'}[q]; $(n).disabled=false; setTimeout(()=>$(n).click(),260); }); });
+$('#n2').onclick=()=>go(3); $('#n3').onclick=()=>go(4); $('#n4').onclick=()=>go(5);
+// derivar ajustes
+function derive(){ let cell={phone:8,scanner:4,unsure:10}[A.recover]||8, ecc='M', pct=0.2, minPar=2; const warns=[];
+  if(A.print==='inkjet'){ cell={3:4,4:5,5:6,6:8,8:10,10:10}[cell]; ecc='H'; warns.push(T('Con inyección de tinta usamos celdas más grandes y corrección alta. Usa papel para inyección de buena calidad y deja secar antes de guardar.')); }
+  if(A.print==='shop') warns.push(T('Pide explícitamente impresión láser al 100 % de escala, sin márgenes automáticos ni "ajustar a página".'));
+  if(A.life==='years'){pct=0.1;minPar=1;} if(A.life==='generations'){ecc= ecc==='M'?'H':'X';pct=0.35;minPar=3;}
+  if(A.recover==='unsure') warns.push(T('El perfil más seguro ocupa unas 7 veces más hojas que el de escáner. Si tienes acceso a un escáner de 600 dpi, considera esa opción.'));
+  return {cell,ecc,pct,minPar,warns}; }
+let manual=false;
+['#cell','#ecc','#parity','#paper','#compress'].forEach(s=>$(s).addEventListener('change',()=>{manual=true;estimate();}));
+async function summary(){ if(!manual){ const dv=derive(); $('#cell').value=dv.cell; $('#ecc').value=dv.ecc; const est0=await (await fetch('/api/estimate?'+new URLSearchParams({size:A.file.size,paper:$('#paper').value,cell:dv.cell,ecc:dv.ecc,parity:0}))).json(); $('#parity').value=Math.max(dv.minPar,Math.ceil(est0.data_pages*dv.pct)); const w=$('#warn'); w.innerHTML=dv.warns.join('<br>'); w.classList.toggle('show',dv.warns.length>0); }
+  $('#cvName').textContent=A.file.name; $('#cvDesc').textContent=$('#desc').value; $('#cvDate').textContent=new Date().toLocaleDateString(I18N.lang==='en'?'en-GB':'es-ES'); estimate(); }
+async function estimate(){ const q={size:A.file.size,paper:$('#paper').value,cell:$('#cell').value,ecc:$('#ecc').value,parity:$('#parity').value};
+  const j=await (await fetch('/api/estimate?'+new URLSearchParams(q))).json();
+  $('#stat').innerHTML=`<div><b>${j.total_pages}</b>${T('hojas (máx.)')}</div><div><b>${(j.payload_per_page/1024).toFixed(0)}</b>${T('KB por hoja')}</div><div><b>${j.parity_pages}</b>${T('de paridad')}</div>`;
+  const names={phone:'móvil',scanner:'escáner 600 dpi',unsure:'cualquier cámara'}, pr={laser:'láser',inkjet:'inyección de tinta',shop:'copistería'}, lf={years:'unos años',decades:'décadas',generations:'generaciones'};
+  $('#chosen').innerHTML=T('Recuperación con {a} · impresión {b} · duración {c}',{a:'<b>'+T(names[A.recover])+'</b>',b:'<b>'+T(pr[A.print])+'</b>',c:'<b>'+T(lf[A.life])+'</b>'})+'<br>'+T('Celda {cell} px ({mm} mm) · corrección {ecc} · {parity} hoja(s) de paridad · {paper}',{cell:q.cell,mm:(q.cell*25.4/600).toFixed(2),ecc:q.ecc,parity:q.parity,paper:q.paper})+'<br><span class="muted">'+T('La compresión puede reducir el número de hojas.')+'</span>';
+  $('#cvMeta').textContent=T('{size} · {t} hojas ({d} de datos + {p} de paridad) · celda {mm} mm',{size:fmt(A.file.size),t:j.total_pages,d:j.data_pages,p:j.parity_pages,mm:(q.cell*25.4/600).toFixed(2)});
+  $('#cvIndex').innerHTML=Array.from({length:Math.min(j.total_pages,12)},(_,i)=>`${String(i+1).padStart(2,' ')} ${i<j.data_pages?T('datos ')+' ':T('paridad ')} ····</br>`).join('')+(j.total_pages>12?'…':''); animateCounters(); }
+function animateCounters(){ $$('#stat b').forEach(b=>{ const v=+b.textContent; if(isNaN(v))return; let t0=null; const run=ts=>{ if(!t0)t0=ts; const p=Math.min(1,(ts-t0)/600); b.textContent=Math.round(v*(1-Math.pow(1-p,3))); if(p<1)requestAnimationFrame(run);}; requestAnimationFrame(run); }); }
+$('#desc').addEventListener('input',()=>{$('#cvDesc').textContent=$('#desc').value});
+// generar con progreso
+$('#btnGen').onclick=async()=>{ const fd=new FormData(); fd.append('file',A.file); fd.append('paper',$('#paper').value); fd.append('cell',$('#cell').value); fd.append('ecc',$('#ecc').value); fd.append('parity',$('#parity').value);
+  fd.append('compress',$('#compress').checked); fd.append('spec_page',$('#cover_on').checked); fd.append('cover',$('#cover_on').checked); fd.append('description',$('#desc').value); fd.append('lang',$('#pdflang').value);
+  $('#genBtns').style.display='none'; $('#gen').classList.add('show'); $('#gstage').textContent=T('Subiendo el fichero…');
+  const r=await fetch('/api/jobs/encode',{method:'POST',body:fd}); if(!r.ok){toast(T('Error: {e}',{e:await r.text()}));$('#genBtns').style.display='';$('#gen').classList.remove('show');return;}
+  const {job}=await r.json(); let pagesN=0;
+  const tick=async()=>{ const j=await (await fetch('/api/jobs/'+job)).json();
+    if(j.state==='error'){ $('#gstage').textContent=T('Error: {e}',{e:j.error}); return; }
+    $('#gpct').textContent=j.pct+'%'; $('#gbar').style.width=j.pct+'%'; $('#gstage').textContent=cap(j.stage)+(j.total>2?' '+T('· {done} de {total} hojas',{done:Math.min(j.done,j.total-2),total:j.total-2}):'');
+    const P=$('#gpages'); if(j.total>2 && P.children.length!==j.total-2){ P.innerHTML=''; for(let i=0;i<j.total-2;i++){P.appendChild(document.createElement('i'));} }
+    [...P.children].forEach((e,i)=>e.classList.toggle('on',i<j.done));
+    if(j.state==='done'){ finish(job,j.summary); return; } setTimeout(tick,500); };
+  tick(); };
+function confetti(){ const c=document.createElement('div'); c.className='confetti'; document.body.appendChild(c); const cols=['#4f46e5','#0f766e','#15803d','#f59e0b','#ef4444','#a78bfa']; for(let i=0;i<90;i++){const e=document.createElement('i');e.style.left=Math.random()*100+'vw';e.style.background=cols[i%cols.length];e.style.animationDelay=(Math.random()*.9)+'s';e.style.transform=`rotate(${Math.random()*360}deg)`;c.appendChild(e);} setTimeout(()=>c.remove(),4000); }
+function cap(s){return s? s[0].toUpperCase()+s.slice(1):''}
+function finish(job,s){ $('#gen').classList.remove('show'); $('.preview').hidden=true; $('#done').classList.add('show'); confetti(); $('#doneSub').textContent=T('{name} · {t} hojas · {pdf} de PDF',{name:A.file.name,t:s.total_pages,pdf:fmt(s.pdf_bytes)});
+  $('#doneStat').innerHTML=`<div><b>${s.total_pages}</b>${T('hojas')}</div><div><b>${s.data_pages}</b>${T('de datos')}</div><div><b>${s.parity_pages}</b>${T('de paridad')}</div><div><b>${s.compressed?T('sí'):T('no')}</b>${T('comprimido')}</div>`;
+  $('#doneSha').textContent='SHA-256 '+s.file_sha256; $('#btnDl').onclick=()=>{ const a=document.createElement('a'); a.href='/api/jobs/'+job+'/file'; a.download=''; a.click(); }; $('#btnDl').click(); }
+</script><script src="/static/fx.js" defer></script></body></html>

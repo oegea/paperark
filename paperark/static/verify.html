@@ -1,0 +1,24 @@
+<!doctype html>
+<html lang="es"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Verificar · PaperArk</title><link rel="stylesheet" href="/static/app.css"><script src="/static/i18n.js"></script>
+<style>.res{margin-top:16px;padding:18px;border-radius:14px;background:var(--bg2);border:1px solid var(--line);animation:rise .5s both}.res.ok{border-color:var(--ok)}.res.bad{border-color:var(--bad)}.res h2{margin:0 0 6px}.hash{word-break:break-all}</style></head>
+<body><div class="wrap">
+  <div class="top"><a class="brand" href="/"><span class="logo">P</span>PaperArk</a><nav><a href="/create">Crear</a><a href="/restore">Recuperar</a><a href="/how"><span class="long">Cómo funciona</span><span class="short" hidden>Guía</span></a></nav></div>
+  <h1>Verificar un fichero</h1>
+  <p class="lead">Comprueba que el fichero recuperado coincide bit a bit con el original: su huella SHA-256 debe ser la que aparece en la portada del backup.</p>
+  <section class="card">
+    <label>Huella esperada (de la portada; vale el principio)</label><input type="text" id="sha" class="mono" placeholder="0ea3595a 61383da3 …">
+    <div class="drop" id="drop">Arrastra aquí el fichero recuperado o toca para elegirlo<input type="file" id="file" hidden></div>
+    <div id="out"></div>
+  </section>
+  <footer><span class="credit">Vibe coded by <a href="https://www.linkedin.com/in/oriolegea/" target="_blank" rel="noopener">Oriol Egea</a> · <a href="/license">MIT license</a> · <a href="/how"><span class="long">Cómo funciona</span><span class="short" hidden>Guía</span></a> · <a href="https://github.com/oegea/paperark" target="_blank" rel="noopener">Código</a></span></footer>
+</div>
+<script>
+const $=s=>document.querySelector(s); const T=(s,v)=>I18N.t(s,v); const m=location.pathname.match(/\/verify\/([0-9a-fA-F…]+)/); if(m) $('#sha').value=m[1].replace('…','');
+async function check(f){ $('#out').innerHTML='<div class="res"><span class="spin"></span> '+T('Calculando SHA-256 de {name}…',{name:f.name})+'</div>';
+  const fd=new FormData(); fd.append('file',f); fd.append('sha',$('#sha').value.replace(/\s+/g,''));
+  const j=await (await fetch('/api/verify',{method:'POST',body:fd})).json();
+  const cls=j.match?'ok':(j.expected?'bad':''); const title=j.match?T('✓ Coincide: el fichero es íntegro'):(j.expected?T('✗ No coincide'):T('Huella calculada'));
+  $('#out').innerHTML=`<div class="res ${cls}"><h2>${title}</h2><div class="mono hash">${j.sha256}</div>${j.partial&&j.match?'<p class="note">'+T('Has introducido solo el principio de la huella; para una verificación completa usa los 64 caracteres de la portada.')+'</p>':''}${j.expected&&!j.match?'<p class="note">'+T('Esperada:')+' <span class="mono">'+j.expected+'</span></p>':''}</div>`; }
+const d=$('#drop'),i=$('#file'); d.onclick=()=>i.click(); i.onchange=()=>{if(i.files[0])check(i.files[0]);}; d.ondragover=e=>{e.preventDefault();d.classList.add('over')}; d.ondragleave=()=>d.classList.remove('over'); d.ondrop=e=>{e.preventDefault();d.classList.remove('over');if(e.dataTransfer.files[0])check(e.dataTransfer.files[0]);};
+</script><script src="/static/fx.js" defer></script></body></html>

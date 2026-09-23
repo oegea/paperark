@@ -1,0 +1,158 @@
+"""Textos del servidor en español e inglés (mensajes de sesión, etapas de
+progreso y textos del PDF). `lang` es "es" o "en"; cualquier otro cae a "es"."""
+from __future__ import annotations
+
+MESSAGES = {
+    "es": {
+        # sesión
+        "unreadable": "No se ha podido leer la hoja: {err}",
+        "decode_error": "Error al decodificar: {err}",
+        "other_file": "Esta hoja pertenece a otro fichero ({name}, SHA-256 {sha}…)",
+        "inconsistent": "La hoja no es coherente con las anteriores (parámetros distintos)",
+        "out_of_range": "Índice de hoja fuera de rango",
+        "dup": "La hoja {n} ya se había escaneado",
+        "dup_ignored": "La hoja {n} ya estaba (duplicada, ignorada)",
+        "wrong_order": "Orden incorrecto: se esperaba la hoja {exp} y esta es la {n}",
+        "partial_strict": "Hoja {n}: {bad} de {total} bloques ilegibles. Vuelve a escanearla o márcala como perdida si hay paridad",
+        "partial": "Hoja {n} leída parcialmente ({bad} de {total} bloques ilegibles); se completará con paridad o con otro escaneo",
+        "hash_mismatch": "Hoja {n}: el SHA-256 de la hoja no coincide (datos corruptos)",
+        "accepted": "Hoja {n} de {total} aceptada ({kind})",
+        "accepted_corr": "Hoja {n} de {total} aceptada ({kind}, {c} símbolos corregidos)",
+        "kind_data": "datos", "kind_parity": "paridad",
+        "no_pages_yet": "Aún no se ha leído ninguna hoja",
+        "idx_out": "Índice fuera de rango",
+        "marked_lost": "Hoja {n} marcada como perdida",
+        "cover_other": "La portada es de otro fichero ({name})",
+        "cover_dup": "Portada ya registrada",
+        "cover_read": "Portada leída: {name} ({p} hojas)",
+        "not_cover_file": "Esta hoja no pertenece al backup de la portada ({name})",
+        "missing_pages": "faltan hojas: {list}",
+        "no_pages": "no se ha leído ninguna hoja",
+        "file_hash_bad": "el SHA-256 del fichero reconstruido NO coincide",
+        "parity_short": "paridad insuficiente para reconstruir",
+        # progreso decodificación
+        "st_load": "leyendo la imagen", "st_finders": "buscando las marcas de las esquinas",
+        "st_align": "alineando la rejilla ({paper}, celda {cell} px)", "st_sample": "muestreando las celdas",
+        "st_header": "cabecera leída: hoja {n} de {total}. Corrigiendo errores", "st_verify": "verificando la huella de la hoja",
+        "st_pdf": "convirtiendo el PDF a imágenes", "st_qr": "buscando el QR de la portada", "st_page": "página {i} de {n}: {stage}",
+        # progreso codificación
+        "en_prep": "preparando", "en_data": "hoja de datos", "en_parity_calc": "calculando paridad", "en_parity": "hoja de paridad",
+        "en_cover": "portada y documentación", "en_pdf": "escribiendo el PDF", "en_done": "listo",
+    },
+    "en": {
+        "unreadable": "Could not read the sheet: {err}",
+        "decode_error": "Decoding error: {err}",
+        "other_file": "This sheet belongs to another file ({name}, SHA-256 {sha}…)",
+        "inconsistent": "This sheet is inconsistent with the previous ones (different parameters)",
+        "out_of_range": "Sheet index out of range",
+        "dup": "Sheet {n} had already been scanned",
+        "dup_ignored": "Sheet {n} was already in (duplicate, ignored)",
+        "wrong_order": "Wrong order: sheet {exp} was expected and this is sheet {n}",
+        "partial_strict": "Sheet {n}: {bad} of {total} blocks unreadable. Scan it again or mark it as lost if there is parity",
+        "partial": "Sheet {n} partially read ({bad} of {total} blocks unreadable); it will be completed with parity or another scan",
+        "hash_mismatch": "Sheet {n}: the sheet's SHA-256 does not match (corrupt data)",
+        "accepted": "Sheet {n} of {total} accepted ({kind})",
+        "accepted_corr": "Sheet {n} of {total} accepted ({kind}, {c} symbols corrected)",
+        "kind_data": "data", "kind_parity": "parity",
+        "no_pages_yet": "No sheet has been read yet",
+        "idx_out": "Index out of range",
+        "marked_lost": "Sheet {n} marked as lost",
+        "cover_other": "The cover belongs to another file ({name})",
+        "cover_dup": "Cover already registered",
+        "cover_read": "Cover read: {name} ({p} sheets)",
+        "not_cover_file": "This sheet does not belong to the cover's backup ({name})",
+        "missing_pages": "missing sheets: {list}",
+        "no_pages": "no sheet has been read",
+        "file_hash_bad": "the SHA-256 of the rebuilt file does NOT match",
+        "parity_short": "not enough parity to rebuild",
+        "st_load": "reading the image", "st_finders": "looking for the corner marks",
+        "st_align": "aligning the grid ({paper}, {cell} px cell)", "st_sample": "sampling the cells",
+        "st_header": "header read: sheet {n} of {total}. Correcting errors", "st_verify": "verifying the sheet's fingerprint",
+        "st_pdf": "converting the PDF to images", "st_qr": "looking for the cover QR", "st_page": "page {i} of {n}: {stage}",
+        "en_prep": "preparing", "en_data": "data sheet", "en_parity_calc": "computing parity", "en_parity": "parity sheet",
+        "en_cover": "cover and documentation", "en_pdf": "writing the PDF", "en_done": "done",
+    },
+}
+
+
+def norm(lang: str | None) -> str:
+    return "en" if (lang or "").lower().startswith("en") else "es"
+
+
+def msg(lang: str | None, key: str, **kw) -> str:
+    table = MESSAGES[norm(lang)]
+    return table.get(key, MESSAGES["es"].get(key, key)).format(**kw)
+
+
+# ---- textos del PDF -----------------------------------------------------
+PDF = {
+    "es": {
+        "hdr_backup": "BACKUP EN PAPEL", "backup": "BACKUP", "contains": "Este documento es una copia de seguridad del fichero",
+        "size": "Tamaño", "sheets": "Hojas", "sheets_v": "{t}  ({d} datos + {p} paridad)", "cell": "Celda", "cell_v": "{mm:.2f} mm  ·  {px} px @ 600 dpi",
+        "prot": "Protección", "prot_v": "RS(255,{k})  ·  {pct} % paridad por hoja",
+        "how_title": "Cómo recuperar el fichero", "qr_cap": "Escanea con la cámara del móvil",
+        "step1": "Abre la pantalla de recuperación", "step1b": "Escanea el QR con el móvil o entra en {base}/restore",
+        "step2": "Fotografía o escanea cada hoja de datos", "step2b": "En cualquier orden. Escáner: 600 dpi en gris. Móvil: hoja plana, buena luz, sin sombras.",
+        "step3": "Descarga el fichero y comprueba su huella", "step3b": "Debe coincidir con la SHA-256 de abajo. Verificación en {base}/verify",
+        "sha_title": "Huella SHA-256 del fichero original",
+        "sha_note": "Si la huella del fichero recuperado coincide con esta, la copia es íntegra bit a bit. Cada hoja lleva además su propia huella, impresa arriba y codificada en sus datos, y la portada no es necesaria para recuperar el fichero.",
+        "why_title": "Por qué papel",
+        "why": "Un disco duro dura unos cinco años; un DVD, quince; una nube, lo que dure la empresa. El papel sin ácido lleva siglos aguantando en un cajón: no se desmagnetiza, no necesita electricidad ni un lector que ya nadie fabrica, y se lee con cualquier cámara. Las manchas, los dobleces, las esquinas rotas y las hojas perdidas están dentro de lo previsto.",
+        "index": "Índice de hojas", "data": "datos  ", "parity": "paridad", "more": "… y {n} hojas más (cada hoja lleva su huella impresa)",
+        "notes": "Notas", "notes_hint": "(a mano: dónde está el original, quién sabe la contraseña, cuándo se hizo la última copia…)",
+        "footer": "Formato PAPERARK v1  ·  cómo funciona: {base}/how  ·  la última hoja describe el formato completo para poder leerlo sin este programa",
+        "sheet": "HOJA {n} / {t}", "kind_data": "datos", "kind_parity": "paridad grupo {g}", "file_sha": "fichero sha256 {h}", "sheet_sha": "hoja    sha256 {h}   ·   {base}/restore",
+        "how_hdr": "CÓMO FUNCIONA ESTE BACKUP", "how_h1": "Cómo funciona este backup",
+        "how_lead": "Un backup en papel que se lee con un escáner o con el móvil y sobrevive a manchas, dobleces, esquinas arrancadas y hojas perdidas.",
+        "anatomy": "Anatomía de una hoja de datos",
+        "legend": [("■", "Finders en las 4 esquinas: fijan la posición"), ("•", "Retícula de marcadores: corrige la geometría local"), ("▦", "4 copias de la cabecera (nº de hoja, huellas)"), ("▒", "Datos: cada celda es un bit, protegidos con RS")],
+        "paras": [
+            ("Qué hay en cada hoja", "Una rejilla de celdas negras y blancas: cada celda es un bit. Cuatro marcas en las esquinas y una retícula de marcadores permiten reconstruir la geometría exacta aunque la foto esté girada, en perspectiva o el papel alabeado. La cabecera de cada hoja (número, total, huellas) va repetida cuatro veces con protección muy alta."),
+            ("Por qué sobrevive", "Los datos llevan códigos Reed-Solomon, los mismos que usan los CD, los discos duros y las sondas espaciales, repartidos por toda la hoja. Una mancha o una esquina arrancada quita un poco de cada bloque en vez de destruir uno entero, y el lector lo reconstruye. Las hojas de paridad permiten perder hojas enteras: con N hojas de paridad se recuperan cualesquiera N hojas."),
+            ("Cómo se recupera", "1. Escanea el QR de la portada o abre {base}/restore.  2. Fotografía o escanea cada hoja, en cualquier orden; la pantalla dice cuáles faltan.  3. Descarga el fichero: su huella SHA-256 debe coincidir con la de la portada."),
+            ("Si dentro de 40 años no existe el programa", "La última hoja describe el formato completo (geometría, marcadores, códigos, cabeceras y máscara) con el detalle necesario para escribir un lector nuevo en cualquier lenguaje. No hay nada propietario ni cifrado en el formato."),
+            ("Cuidados", "Imprime en láser (el tóner es plástico fundido; la tinta se desvanece), a tamaño real, en papel sin ácido (ISO 9706). Guarda las hojas planas, secas y a oscuras, sin grapas. Amarillear, doblarse o mancharse entra dentro de lo previsto."),
+        ],
+        "cap_title": "Capacidad por hoja A4 según el tamaño de celda (corrección M)",
+        "cap_rows": [("Celda", "Cómo recuperar", "KB por hoja"), ("0,13 mm (3 px)", "escáner 600 dpi", "257"), ("0,17 mm (4 px)", "escáner 600 dpi o móvil de 48 MP", "143"), ("0,21 mm (5 px)", "escáner 300–600 dpi", "91"), ("0,34 mm (8 px)", "cámara del móvil de 8 MP o más", "34"), ("0,42 mm (10 px)", "cualquier cámara o escáner", "21")],
+        "spec_hdr": "ESPECIFICACIÓN DEL FORMATO", "spec_h1": "Especificación del formato PAPERARK v1",
+        "spec_lead": "Todo lo necesario para escribir un lector nuevo sin este programa. Guarda esta hoja con las demás.",
+    },
+    "en": {
+        "hdr_backup": "PAPER BACKUP", "backup": "BACKUP", "contains": "This document is a backup copy of the file",
+        "size": "Size", "sheets": "Sheets", "sheets_v": "{t}  ({d} data + {p} parity)", "cell": "Cell", "cell_v": "{mm:.2f} mm  ·  {px} px @ 600 dpi",
+        "prot": "Protection", "prot_v": "RS(255,{k})  ·  {pct} % parity per sheet",
+        "how_title": "How to recover the file", "qr_cap": "Scan with your phone camera",
+        "step1": "Open the recovery screen", "step1b": "Scan the QR with your phone or go to {base}/restore",
+        "step2": "Photograph or scan every data sheet", "step2b": "In any order. Scanner: 600 dpi grayscale. Phone: flat sheet, good light, no shadows.",
+        "step3": "Download the file and check its fingerprint", "step3b": "It must match the SHA-256 below. Verify at {base}/verify",
+        "sha_title": "SHA-256 fingerprint of the original file",
+        "sha_note": "If the fingerprint of the recovered file matches this one, the copy is intact bit for bit. Each sheet also carries its own fingerprint, printed at the top and encoded in its data, and the cover is not needed to recover the file.",
+        "why_title": "Why paper",
+        "why": "A hard drive lasts about five years; a DVD, fifteen; a cloud, as long as the company. Acid-free paper has been surviving in drawers for centuries: it does not demagnetize, needs no electricity nor a reader nobody makes anymore, and any camera can read it. Stains, folds, torn corners and lost sheets are all within what the format expects.",
+        "index": "Sheet index", "data": "data   ", "parity": "parity ", "more": "… and {n} more sheets (each sheet carries its printed fingerprint)",
+        "notes": "Notes", "notes_hint": "(by hand: where the original is, who knows the password, when the last copy was made…)",
+        "footer": "PAPERARK v1 format  ·  how it works: {base}/how  ·  the last sheet describes the full format so it can be read without this software",
+        "sheet": "SHEET {n} / {t}", "kind_data": "data", "kind_parity": "parity group {g}", "file_sha": "file  sha256 {h}", "sheet_sha": "sheet sha256 {h}   ·   {base}/restore",
+        "how_hdr": "HOW THIS BACKUP WORKS", "how_h1": "How this backup works",
+        "how_lead": "A paper backup that a scanner or a phone can read, and that survives stains, folds, torn corners and lost sheets.",
+        "anatomy": "Anatomy of a data sheet",
+        "legend": [("■", "Finders in the 4 corners: fix the position"), ("•", "Marker lattice: corrects local geometry"), ("▦", "4 copies of the header (sheet number, fingerprints)"), ("▒", "Data: each cell is one bit, protected with RS")],
+        "paras": [
+            ("What is on each sheet", "A grid of black and white cells: each cell is one bit. Four corner marks and a lattice of small markers let the reader rebuild the exact geometry even if the photo is rotated, in perspective or the paper is warped. The header of each sheet (number, total, fingerprints) is repeated four times with very high protection."),
+            ("Why it survives", "The data carries Reed-Solomon codes, the same ones used by CDs, hard drives and space probes, spread across the whole sheet. A stain or a torn corner takes a little from every block instead of destroying one, and the reader rebuilds it. Parity sheets allow losing whole sheets: with N parity sheets, any N sheets can be recovered."),
+            ("How it is recovered", "1. Scan the cover QR or open {base}/restore.  2. Photograph or scan every sheet, in any order; the screen tells you which are missing.  3. Download the file: its SHA-256 must match the one on the cover."),
+            ("If this software no longer exists in 40 years", "The last sheet describes the complete format (geometry, markers, codes, headers and mask) in enough detail to write a new reader in any language. Nothing in the format is proprietary or encrypted."),
+            ("Care", "Print with a laser printer (toner is fused plastic; ink fades), at actual size, on acid-free paper (ISO 9706). Keep the sheets flat, dry and dark, without staples. Yellowing, folding or staining is expected."),
+        ],
+        "cap_title": "Capacity per A4 sheet by cell size (M correction)",
+        "cap_rows": [("Cell", "How to recover", "KB per sheet"), ("0.13 mm (3 px)", "600 dpi scanner", "257"), ("0.17 mm (4 px)", "600 dpi scanner or 48 MP phone", "143"), ("0.21 mm (5 px)", "300–600 dpi scanner", "91"), ("0.34 mm (8 px)", "phone camera, 8 MP or more", "34"), ("0.42 mm (10 px)", "any camera or scanner", "21")],
+        "spec_hdr": "FORMAT SPECIFICATION", "spec_h1": "PAPERARK v1 format specification",
+        "spec_lead": "Everything needed to write a new reader without this software. Keep this sheet with the others.",
+    },
+}
+
+
+def pdf_t(lang: str | None, key: str, **kw):
+    v = PDF[norm(lang)].get(key, PDF["es"].get(key, key))
+    return v.format(**kw) if isinstance(v, str) and kw else v
