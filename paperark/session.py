@@ -356,6 +356,9 @@ class RestoreSession:
         body = stream[4 + mlen:]
         if manifest.get("compression") == "zstd":
             body = zstandard.ZstdDecompressor().decompress(body, max_output_size=max(1, manifest["size"]) * 2 + 1024)
+        elif manifest.get("compression") == "deflate":
+            import zlib
+            body = zlib.decompress(body)
         sha = hashlib.sha256(body).digest()
         if sha != m.file_sha256:
             raise ValueError(self.t("file_hash_bad"))

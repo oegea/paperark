@@ -64,6 +64,10 @@ window.I18N = (function () {
     "{name} · {t} hojas · {pdf} de PDF": "{name} · {t} sheets · {pdf} PDF", "sí": "yes", "no": "no", "· {done} de {total} hojas": "· {done} of {total} sheets",
     "Generando el PDF… (sin barra de progreso en este servidor)": "Generating the PDF… (no progress bar on this server)",
     "Este servidor no guarda estado entre peticiones: sube todas las hojas seguidas y sin cerrar la pestaña. Si la sesión se pierde, vuelve a subirlas.": "This server keeps no state between requests: upload all the sheets in a row without closing the tab. If the session is lost, upload them again.",
+    "Generar en tu navegador: el fichero no sale de tu dispositivo": "Generate in your browser: the file never leaves your device", "(descarga un motor de ≈20 MB la primera vez)": "(downloads a ≈20 MB engine the first time)",
+    "Preparando el motor en tu navegador…": "Preparing the engine in your browser…", "Descargando el motor Python (≈20 MB, solo la primera vez)…": "Downloading the Python engine (≈20 MB, first time only)…",
+    "Cargando numpy y Pillow…": "Loading numpy and Pillow…", "Instalando dependencias…": "Installing dependencies…", "Cargando el codificador…": "Loading the encoder…", "Motor listo": "Engine ready",
+    "No se ha podido generar en el navegador; prueba desmarcando la opción.": "Could not generate in the browser; try unticking the option.",
     "tipo desconocido": "unknown type", "Quitar": "Remove", "Error: {e}": "Error: {e}",
     // --- recuperar
     "Identificar el backup": "Identify the backup", "Capturar las hojas": "Capture the sheets", "Descargar y verificar": "Download and verify",

@@ -3,7 +3,7 @@
 Cabecera (128 bytes, little-endian):
   0   8  magic  b"PAPERARK"
   8   1  version (1)
-  9   1  flags: bit0 = flujo comprimido con zstd, bit1 = página de paridad
+  9   1  flags: bit0 = flujo comprimido con zstd, bit1 = página de paridad, bit2 = comprimido con deflate (zlib)
   10  1  cell (px @600dpi)
   11  1  k (símbolos de datos por palabra RS de 255)
   12  4  page_index (0-based, incluye páginas de paridad al final)
@@ -43,6 +43,7 @@ MAGIC = b"PAPERARK"
 VERSION = 1
 FLAG_ZSTD = 1
 FLAG_PARITY = 2
+FLAG_DEFLATE = 4  # cuerpo comprimido con zlib/deflate (generación en el navegador)
 MASK_SEED = 0x9E3779B9
 
 ECC_LEVELS = {  # nombre -> k (datos por palabra de 255)

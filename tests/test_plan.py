@@ -23,7 +23,9 @@ def test_header_pack_roundtrip():
 
 def test_stream_compression_decision():
     s, used = build_stream(b"\0" * 10000, "ceros.bin")
-    assert used and len(s) < 500
+    assert used == "zstd" and len(s) < 500
+    s3, used3 = build_stream(b"\0" * 10000, "ceros.bin", compress="deflate")
+    assert used3 == "deflate" and len(s3) < 500
     import os
     s2, used2 = build_stream(os.urandom(10000), "rand.bin")
-    assert not used2 and len(s2) >= 10000
+    assert used2 == "none" and len(s2) >= 10000

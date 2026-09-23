@@ -11,7 +11,9 @@ from PIL import Image, ImageDraw, ImageFont
 from .i18n import norm, pdf_t
 from .layout import DPI, mm_to_px
 
+_FONT_DIR = os.path.join(os.path.dirname(__file__), "static", "fonts")  # DejaVu (licencia libre), igual en todos los entornos
 _MONO_CANDIDATES = [
+    os.path.join(_FONT_DIR, "DejaVuSansMono.ttf"),
     "/System/Library/Fonts/Menlo.ttc", "/System/Library/Fonts/Monaco.ttf", "/Library/Fonts/Courier New.ttf",
     "/usr/share/fonts/truetype/dejavu/DejaVuSansMono.ttf", "/usr/share/fonts/truetype/liberation/LiberationMono-Regular.ttf",
     "C:/Windows/Fonts/consola.ttf", "C:/Windows/Fonts/cour.ttf",
@@ -19,6 +21,7 @@ _MONO_CANDIDATES = [
 
 
 _SANS_CANDIDATES = [
+    os.path.join(_FONT_DIR, "DejaVuSans.ttf"),
     "/System/Library/Fonts/Supplemental/Arial.ttf", "/System/Library/Fonts/Helvetica.ttc", "/Library/Fonts/Arial.ttf",
     "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf", "/usr/share/fonts/truetype/liberation/LiberationSans-Regular.ttf",
     "/usr/share/fonts/truetype/noto/NotoSans-Regular.ttf", "C:/Windows/Fonts/arial.ttf", "C:/Windows/Fonts/segoeui.ttf",

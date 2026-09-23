@@ -31,6 +31,11 @@ con esquinas arrancadas o falten hojas enteras.
 
 Ver [DESIGN.md](DESIGN.md) para el diseño y [BENCH.md](BENCH.md) para los resultados empíricos (89 de 100 escenarios íntegros, 0 fallos; el resto son hojas parciales recuperables con paridad).
 
+* **Generación en el navegador**: el asistente puede generar el PDF en tu
+  propio navegador con Python sobre WebAssembly (Pyodide), ejecutando el mismo
+  código que el servidor: el fichero no sale de tu dispositivo, hay barra de
+  progreso y no depende de límites de tiempo del servidor (imprescindible en
+  Vercel). Descarga un motor de ≈20 MB la primera vez.
 * **Español e inglés**: interfaz web en ambos idiomas (conmutador ES/EN en la
   cabecera, se recuerda), mensajes del servidor y PDF en el idioma elegido
   (`--lang en` en la CLI o el selector "Idioma del PDF" del asistente).
@@ -95,7 +100,7 @@ paperark.tu-dominio.com {
 
 ### Vercel (preset FastAPI)
 
-Funciona con limitaciones. El repositorio ya incluye `main.py` (expone `app`) y `vercel.json` (60 s por petición, 1 GB). En el proyecto de Vercel: preset **FastAPI**, variable de entorno `PAPERARK_BASE_URL=https://tu-proyecto.vercel.app` (o tu dominio). Al no haber procesos persistentes, la web detecta el modo serverless y genera el PDF en una sola petición (sin barra de progreso; ficheros grandes pueden superar los 60 s) y la sesión de recuperación puede perderse si las peticiones caen en instancias distintas. Para uso serio, un contenedor persistente (Fly.io, Railway, Render, VPS) es mejor opción.
+Funciona: la generación del PDF se hace en el navegador (Pyodide) y la recuperación en la función. El repositorio ya incluye `main.py` (expone `app`) y `vercel.json` (60 s por petición, 1 GB). En el proyecto de Vercel: preset **FastAPI**, variable de entorno `PAPERARK_BASE_URL=https://tu-proyecto.vercel.app` (o tu dominio). Al no haber procesos persistentes, la sesión de recuperación puede perderse si las peticiones caen en instancias distintas (con poco tráfico no suele ocurrir); si desmarcas la generación en el navegador, el servidor genera en una sola petición con el límite de 60 s. Para uso serio, un contenedor persistente (Fly.io, Railway, Render, VPS) es mejor opción.
 
 ### Sin Docker
 

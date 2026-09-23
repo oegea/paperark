@@ -55,6 +55,7 @@
     <textarea id="desc" maxlength="600" placeholder="Ej.: Claves de recuperación de la cartera y copia del testamento digital. Generado en casa el 23/09/2026. Contraseña del ZIP: la de siempre."></textarea>
     <label for="pdflang">Idioma del PDF</label>
     <select id="pdflang" style="max-width:240px"><option value="es">Español</option><option value="en">English</option></select>
+    <div class="toggle"><input type="checkbox" id="local" checked><label for="local" style="margin:0">Generar en tu navegador: el fichero no sale de tu dispositivo <span class="muted">(descarga un motor de ≈20 MB la primera vez)</span></label></div>
     <div class="nav-btns"><span></span><button class="btn primary" id="n1" disabled>Continuar →</button></div>
   </section>
 
@@ -154,7 +155,9 @@
 <div class="toast" id="toast"></div>
 <script>
 const $=s=>document.querySelector(s), $$=s=>[...document.querySelectorAll(s)];
-const A={file:null, recover:null, print:null, life:null}; const T=(s,v)=>I18N.t(s,v); $('#pdflang').value=I18N.lang; let SERVERLESS=false; fetch('/api/info').then(r=>r.json()).then(j=>{SERVERLESS=!!j.serverless;}).catch(()=>{});
+const A={file:null, recover:null, print:null, life:null}; const T=(s,v)=>I18N.t(s,v); $('#pdflang').value=I18N.lang; let SERVERLESS=false, BASE=location.origin; fetch('/api/info').then(r=>r.json()).then(j=>{SERVERLESS=!!j.serverless; BASE=j.base_url||BASE; if(SERVERLESS){$('#local').checked=true;} }).catch(()=>{});
+let worker=null; function getWorker(){ if(!worker){ worker=new Worker('/static/worker-encode.js'); } return worker; }
+if(window.Worker){ setTimeout(()=>{ try{ getWorker().postMessage({type:'boot'}); }catch(e){} }, 1500); } else { $('#local').checked=false; $('#local').disabled=true; }
 let step=1;
 function fmt(n){return n==null?'—':n<1024?n+' B':n<1048576?(n/1024).toFixed(1)+' KB':(n/1048576).toFixed(2)+' MB'}
 function toast(t){const e=$('#toast');e.textContent=t;e.classList.add('show');clearTimeout(e._t);e._t=setTimeout(()=>e.classList.remove('show'),2400)}
@@ -193,6 +196,7 @@ $('#desc').addEventListener('input',()=>{$('#cvDesc').textContent=$('#desc').val
 $('#btnGen').onclick=async()=>{ const fd=new FormData(); fd.append('file',A.file); fd.append('paper',$('#paper').value); fd.append('cell',$('#cell').value); fd.append('ecc',$('#ecc').value); fd.append('parity',$('#parity').value);
   fd.append('compress',$('#compress').checked); fd.append('spec_page',$('#cover_on').checked); fd.append('cover',$('#cover_on').checked); fd.append('description',$('#desc').value); fd.append('lang',$('#pdflang').value);
   $('#genBtns').style.display='none'; $('#gen').classList.add('show'); $('#gstage').textContent=T('Subiendo el fichero…');
+  if($('#local').checked && window.Worker){ await generateLocal(); return; }
   if(SERVERLESS){ // sin procesos persistentes: una sola petición, progreso indeterminado
     $('#gbar').style.width='100%'; $('#gbar').classList.add('indet'); $('#gpct').textContent='…'; $('#gstage').textContent=T('Generando el PDF… (sin barra de progreso en este servidor)');
     const r=await fetch('/api/encode',{method:'POST',body:fd}); if(!r.ok){toast(T('Error: {e}',{e:await r.text()}));$('#genBtns').style.display='';$('#gen').classList.remove('show');return;}
@@ -207,6 +211,22 @@ $('#btnGen').onclick=async()=>{ const fd=new FormData(); fd.append('file',A.file
     [...P.children].forEach((e,i)=>e.classList.toggle('on',i<j.done));
     if(j.state==='done'){ finish(job,j.summary); return; } setTimeout(tick,500); };
   tick(); };
+const STAGES={engine:'Descargando el motor Python (≈20 MB, solo la primera vez)…',packages:'Cargando numpy y Pillow…',deps:'Instalando dependencias…',sources:'Cargando el codificador…',ready:'Motor listo'};
+async function generateLocal(){
+  const w=getWorker(); const buf=await A.file.arrayBuffer();
+  $('#gstage').textContent=T('Preparando el motor en tu navegador…'); $('#gbar').classList.add('indet'); $('#gbar').style.width='100%'; $('#gpct').textContent='…';
+  const opts={filename:A.file.name,paper:$('#paper').value,cell:$('#cell').value,ecc:$('#ecc').value,parity:$('#parity').value,compress:$('#compress').checked,spec:$('#cover_on').checked,cover:$('#cover_on').checked,description:$('#desc').value,lang:$('#pdflang').value,base_url:BASE};
+  await new Promise((resolve)=>{
+    w.onmessage=ev=>{ const m=ev.data;
+      if(m.type==='stage'){ $('#gstage').textContent=T(STAGES[m.key]||m.key); }
+      else if(m.type==='progress'){ $('#gbar').classList.remove('indet'); const pct=Math.round(100*m.done/Math.max(1,m.total)); $('#gpct').textContent=pct+'%'; $('#gbar').style.width=pct+'%';
+        $('#gstage').textContent=cap(m.stage)+(m.total>2?' '+T('· {done} de {total} hojas',{done:Math.min(m.done,m.total-2),total:m.total-2}):'');
+        const P=$('#gpages'); if(m.total>2 && P.children.length!==m.total-2){ P.innerHTML=''; for(let i=0;i<m.total-2;i++){P.appendChild(document.createElement('i'));} } [...P.children].forEach((e,i)=>e.classList.toggle('on',i<m.done)); }
+      else if(m.type==='done'){ const blob=new Blob([m.pdf],{type:'application/pdf'}); const s=m.summary; s._url=URL.createObjectURL(blob); s._name=A.file.name.replace(/\.[^.]+$/,'')+'.paperark.pdf'; s.pdf_bytes=blob.size; finish(null,s); resolve(); }
+      else if(m.type==='error'){ $('#gstage').textContent=T('Error: {e}',{e:m.error}); $('#gbar').classList.remove('indet'); $('#genBtns').style.display=''; toast(T('No se ha podido generar en el navegador; prueba desmarcando la opción.')); resolve(); } };
+    w.postMessage({type:'encode',data:buf,opts},[buf]);
+  });
+}
 function confetti(){ const c=document.createElement('div'); c.className='confetti'; document.body.appendChild(c); const cols=['#4f46e5','#0f766e','#15803d','#f59e0b','#ef4444','#a78bfa']; for(let i=0;i<90;i++){const e=document.createElement('i');e.style.left=Math.random()*100+'vw';e.style.background=cols[i%cols.length];e.style.animationDelay=(Math.random()*.9)+'s';e.style.transform=`rotate(${Math.random()*360}deg)`;c.appendChild(e);} setTimeout(()=>c.remove(),4000); }
 function cap(s){return s? s[0].toUpperCase()+s.slice(1):''}
 function finish(job,s){ $('#gen').classList.remove('show'); $('.preview').hidden=true; $('#done').classList.add('show'); confetti(); $('#doneSub').textContent=T('{name} · {t} hojas · {pdf} de PDF',{name:A.file.name,t:s.total_pages,pdf:fmt(s.pdf_bytes)});

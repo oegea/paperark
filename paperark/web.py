@@ -83,6 +83,17 @@ def license_page():
     return page("license.html")
 
 
+PY_MODULES = ["__init__", "encoder", "codec", "gf", "layout", "render", "cover", "meta", "i18n", "spec_text"]
+
+
+@app.get("/api/pysrc")
+def api_pysrc():
+    """Código fuente de los módulos de codificación, para ejecutarlos en el
+    navegador con Pyodide (generación local: el fichero no sale del dispositivo)."""
+    here = os.path.dirname(__file__)
+    return {m: open(os.path.join(here, m + ".py"), encoding="utf-8").read() for m in PY_MODULES}
+
+
 @app.get("/api/license")
 def api_license():
     root = os.path.dirname(os.path.dirname(__file__))

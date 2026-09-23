@@ -10,7 +10,7 @@ from dataclasses import dataclass, field
 import numpy as np
 import zstandard
 
-from .codec import ECC_LEVELS, FLAG_PARITY, FLAG_ZSTD, PageCodec, PageHeader
+from .codec import ECC_LEVELS, FLAG_DEFLATE, FLAG_PARITY, FLAG_ZSTD, PageCodec, PageHeader
 from .gf import rs_encode_columns
 from .layout import Layout, Profile, get_layout
 from .cover import render_cover, render_howto, render_spec
@@ -52,17 +52,23 @@ class EncodeResult:
     qr_url: str = ""
 
 
-def build_stream(data: bytes, filename: str, compress: bool = True, description: str = "") -> tuple[bytes, bool]:
+def build_stream(data: bytes, filename: str, compress=True, description: str = "") -> tuple[bytes, str]:
+    """compress: True/"zstd", "deflate" o False/"none". Devuelve (flujo, compresión usada)."""
     sha = hashlib.sha256(data).hexdigest()
     body = data
-    used = False
-    if compress and len(data) > 64:
-        c = zstandard.ZstdCompressor(level=19).compress(data)
+    used = "none"
+    method = "zstd" if compress is True else (compress or "none")
+    if method != "none" and len(data) > 64:
+        if method == "deflate":
+            import zlib
+            c = zlib.compress(data, 9)
+        else:
+            c = zstandard.ZstdCompressor(level=19).compress(data)
         if len(c) < len(data) * 0.97:
-            body, used = c, True
+            body, used = c, method
     manifest = json.dumps({
         "name": filename, "size": len(data), "sha256": sha,
-        "compression": "zstd" if used else "none", "created": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
+        "compression": used, "created": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
         "format": "PAPERARK/1", "description": description[:2000],
     }, ensure_ascii=False).encode("utf-8")
     stream = len(manifest).to_bytes(4, "little") + manifest + body
@@ -90,7 +96,8 @@ def encode_file(data: bytes, filename: str, paper: str = "A4", cell: int = 4, ec
     if parity_pages >= MAX_GROUP:
         raise ValueError("demasiadas páginas de paridad por grupo (máx 254)")
     total, n_groups, groups = plan_pages(D, parity_pages)
-    flags = (FLAG_ZSTD if used else 0)
+    flags = {"zstd": FLAG_ZSTD, "deflate": FLAG_DEFLATE}.get(used, 0)
+    compressed = used != "none"
     base_url = (base_url or DEFAULT_BASE_URL).rstrip("/")
     pages_img = []
     page_hashes = []
@@ -130,13 +137,13 @@ def encode_file(data: bytes, filename: str, paper: str = "A4", cell: int = 4, ec
             pages_img.append(render_page(layout, grid, header=header_info(h, pdf_t(lang, "kind_parity", g=g + 1))))
             page_hashes.append(h.page_sha256.hex())
             idx += 1
-    meta = make_meta(filename, len(data), file_sha.hex(), total, D, parity_pages, cell, k, used, paper, description)
+    meta = make_meta(filename, len(data), file_sha.hex(), total, D, parity_pages, cell, k, compressed, paper, description)
     url = meta_url(meta, base_url)
     front, back = [], []
     report("en_cover", total, total + 2)
     if cover:
         front.append(render_cover(layout.page_w, layout.page_h, filename=filename, size=len(data), sha256_hex=file_sha.hex(),
-                                  total_pages=total, data_pages=D, parity_pages=total - D, cell=cell, k=k, compressed=used,
+                                  total_pages=total, data_pages=D, parity_pages=total - D, cell=cell, k=k, compressed=compressed,
                                   qr_text=url, base_url=base_url, page_hashes=page_hashes, description=description, lang=lang))
         back.append(render_howto(layout.page_w, layout.page_h, base_url, lang=lang))
     if spec_page:
@@ -144,7 +151,7 @@ def encode_file(data: bytes, filename: str, paper: str = "A4", cell: int = 4, ec
     report("en_pdf", total + 1, total + 2)
     pdf = write_pdf(front + pages_img + back, title or (f"Paper backup: {filename}" if lang == "en" else f"Backup en papel: {filename}"))
     report("en_done", total + 2, total + 2)
-    return EncodeResult(pdf, D, total - D, total, P, file_sha.hex(), used, len(stream), layout.describe(), page_hashes, meta, url)
+    return EncodeResult(pdf, D, total - D, total, P, file_sha.hex(), compressed, len(stream), layout.describe(), page_hashes, meta, url)
 
 
 def estimate(size: int, paper: str = "A4", cell: int = 4, ecc: str = "M", parity_pages: int = 0) -> dict:

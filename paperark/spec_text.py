@@ -29,12 +29,12 @@ Esta hoja describe como recuperar los datos de las hojas siguientes sin disponer
    slot i*n_cw + c; cada slot son 8 celdas consecutivas (MSB primero). Mascara XOR sobre los bytes de slot.
    La carga util de la pagina son los n_cw*k bytes de datos concatenados (los sobrantes son ceros).
 
-3. CABECERA (little-endian): 0:8 magic "PAPERARK" | 8 version=1 | 9 flags (bit0 zstd, bit1 paridad)
+3. CABECERA (little-endian): 0:8 magic "PAPERARK" | 8 version=1 | 9 flags (bit0 zstd, bit1 paridad, bit2 deflate/zlib)
    | 10 C | 11 k | 12 u32 page_index | 16 u32 total_pages | 20 u32 data_pages | 24 u32 parity_per_group
    | 28 u32 payload_len | 32 u64 stream_len | 40 sha256 fichero | 72 sha256 pagina | 104 nombre[20] | 124 crc32.
 
 4. FLUJO DEL FICHERO: [u32 len][manifiesto JSON][cuerpo], troceado en paginas de n_cw*k bytes.
-   Cuerpo = fichero original o comprimido con zstd (flag). Paginas de paridad: grupos de hasta 255 paginas;
+   Cuerpo = fichero original o comprimido con zstd o deflate (flag; el manifiesto lo repite). Paginas de paridad: grupos de hasta 255 paginas;
    K = 255 - M datos por grupo; para cada posicion de byte j, RS(K+M,K) sobre las K paginas del grupo
    (mismas convenciones GF) -> M paginas de paridad. Cualquier K de las K+M paginas bastan.
 
@@ -71,12 +71,12 @@ This sheet describes how to recover the data on the following sheets without the
    i*n_cw + c; each slot is 8 consecutive cells (MSB first). XOR mask over the slot bytes.
    The sheet payload is the n_cw*k data bytes concatenated (the remainder is zeros).
 
-3. HEADER (little-endian): 0:8 magic "PAPERARK" | 8 version=1 | 9 flags (bit0 zstd, bit1 parity)
+3. HEADER (little-endian): 0:8 magic "PAPERARK" | 8 version=1 | 9 flags (bit0 zstd, bit1 parity, bit2 deflate/zlib)
    | 10 C | 11 k | 12 u32 page_index | 16 u32 total_pages | 20 u32 data_pages | 24 u32 parity_per_group
    | 28 u32 payload_len | 32 u64 stream_len | 40 sha256 file | 72 sha256 sheet | 104 name[20] | 124 crc32.
 
 4. FILE STREAM: [u32 len][JSON manifest][body], split into sheets of n_cw*k bytes.
-   Body = original file or zstd-compressed (flag). Parity sheets: groups of up to 255 sheets;
+   Body = original file or zstd- or deflate-compressed (flag; the manifest repeats it). Parity sheets: groups of up to 255 sheets;
    K = 255 - M data per group; for each byte position j, RS(K+M,K) over the K sheets of the group
    (same GF conventions) -> M parity sheets. Any K of the K+M sheets suffice.
 
