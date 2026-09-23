@@ -29,6 +29,7 @@ celdas de datos. Todo se enmascara XOR con xorshift32 (semilla 0x9E3779B9).
 from __future__ import annotations
 
 import struct
+import sys
 import zlib
 from dataclasses import dataclass
 from functools import lru_cache
@@ -60,18 +61,28 @@ def _rs(nsym: int) -> RSCodec:
 
 
 _POOL = None
+_POOL_FAILED = False
 
 
 def _pool():
-    global _POOL
+    """Pool de procesos para la corrección RS; None si el entorno no lo permite
+    (serverless sin /dev/shm, WebAssembly, PAPERARK_NO_POOL=1): entonces se
+    decodifica en secuencia."""
+    global _POOL, _POOL_FAILED
+    import os
+    if _POOL_FAILED or os.environ.get("PAPERARK_NO_POOL") or os.environ.get("VERCEL") or sys.platform == "emscripten":
+        return None
     if _POOL is None:
-        import concurrent.futures as cf
-        import multiprocessing as mp
-        import os
-        # 'fork' evita re-importar el módulo principal (los workers solo hacen
-        # aritmética RS en Python puro); en Windows no existe y se usa spawn.
-        ctx = mp.get_context("fork") if "fork" in mp.get_all_start_methods() else mp.get_context("spawn")
-        _POOL = cf.ProcessPoolExecutor(max_workers=max(1, min(8, (os.cpu_count() or 2) - 1)), mp_context=ctx)
+        try:
+            import concurrent.futures as cf
+            import multiprocessing as mp
+            # 'fork' evita re-importar el módulo principal (los workers solo hacen
+            # aritmética RS en Python puro); en Windows no existe y se usa spawn.
+            ctx = mp.get_context("fork") if "fork" in mp.get_all_start_methods() else mp.get_context("spawn")
+            _POOL = cf.ProcessPoolExecutor(max_workers=max(1, min(8, (os.cpu_count() or 2) - 1)), mp_context=ctx)
+        except (OSError, ImportError, ValueError):
+            _POOL_FAILED = True
+            return None
     return _POOL
 
 
@@ -301,8 +312,12 @@ class PageCodec:
                 er = er + extra
             stats["erasures_used"] += len(er)
             tasks.append((c, (self.nsym, cw.tobytes(), er)))
-        if len(tasks) > 40:
-            results = list(_pool().map(_decode_task, [t for _, t in tasks], chunksize=16))
+        pool = _pool() if len(tasks) > 40 else None
+        if pool is not None:
+            try:
+                results = list(pool.map(_decode_task, [t for _, t in tasks], chunksize=16))
+            except (OSError, RuntimeError):
+                results = [_decode_task(t) for _, t in tasks]
         else:
             results = [_decode_task(t) for _, t in tasks]
         for (c, _), (dec, ok) in zip(tasks, results):

@@ -83,7 +83,7 @@ def license_page():
     return page("license.html")
 
 
-PY_MODULES = ["__init__", "encoder", "codec", "gf", "layout", "render", "cover", "meta", "i18n", "spec_text"]
+PY_MODULES = ["__init__", "encoder", "codec", "gf", "layout", "render", "cover", "meta", "i18n", "spec_text", "decoder", "session"]
 
 
 @app.get("/api/pysrc")

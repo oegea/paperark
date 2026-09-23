@@ -68,6 +68,9 @@ window.I18N = (function () {
     "Preparando el motor en tu navegador…": "Preparing the engine in your browser…", "Descargando el motor Python (≈20 MB, solo la primera vez)…": "Downloading the Python engine (≈20 MB, first time only)…",
     "Cargando numpy y Pillow…": "Loading numpy and Pillow…", "Instalando dependencias…": "Installing dependencies…", "Cargando el codificador…": "Loading the encoder…", "Motor listo": "Engine ready",
     "No se ha podido generar en el navegador; prueba desmarcando la opción.": "Could not generate in the browser; try unticking the option.",
+    "Recuperar en tu navegador: las fotos no salen de tu dispositivo": "Recover in your browser: the photos never leave your device", "(motor de ≈35 MB la primera vez)": "(≈35 MB engine the first time)",
+    "Descargando el motor Python (≈35 MB, solo la primera vez)…": "Downloading the Python engine (≈35 MB, first time only)…", "Cargando numpy y OpenCV…": "Loading numpy and OpenCV…", "Cargando el decodificador…": "Loading the decoder…",
+    "local (en tu navegador)": "local (in your browser)", "No se ha podido iniciar el motor local; usando el servidor.": "Could not start the local engine; using the server.",
     "tipo desconocido": "unknown type", "Quitar": "Remove", "Error: {e}": "Error: {e}",
     // --- recuperar
     "Identificar el backup": "Identify the backup", "Capturar las hojas": "Capture the sheets", "Descargar y verificar": "Download and verify",
