@@ -113,3 +113,5 @@ Notas para un servicio público: las sesiones de recuperación viven en memoria 
 ## Licencia
 
 MIT. Vibe coded by [Oriol Egea](https://www.linkedin.com/in/oriolegea/).
+
+Desplegado en https://paperark-1c5k.vercel.app
