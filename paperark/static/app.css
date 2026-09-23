@@ -146,3 +146,5 @@ body.leaving{opacity:0}
 @keyframes toastin{from{transform:translateX(-50%) translateY(20px) scale(.95)}to{transform:translateX(-50%) scale(1)}}
 .top nav .langsw{border:1px solid var(--line2);border-radius:999px;padding:2px 10px;font-size:12px;font-weight:700;color:var(--ink2);letter-spacing:.5px}
 .top nav .langsw:hover{border-color:var(--acc);color:var(--acc)}
+.bar i.indet{background:linear-gradient(90deg,var(--acc-soft),var(--acc),var(--acc-soft));background-size:200% 100%;animation:indet 1.2s linear infinite}
+@keyframes indet{from{background-position:200% 0}to{background-position:-200% 0}}

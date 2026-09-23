@@ -102,6 +102,7 @@ async function init(){
   else if(hashMeta){ const fd=new FormData(); fd.append('meta',hashMeta); await fetch(`/api/restore/${sid}/meta`,{method:'POST',body:fd}); st=await (await fetch('/api/restore/'+sid+LQ)).json(); }
   $('#sidLabel').textContent=T('sesión')+' '+sid;
   const info=await (await fetch('/api/info')).json();
+  if(info.serverless){ const n=document.createElement('div'); n.className='note'; n.style.cssText='margin:0 0 12px;padding:10px 12px;border-radius:12px;background:var(--warn-soft);color:var(--warn)'; n.textContent=T('Este servidor no guarda estado entre peticiones: sube todas las hojas seguidas y sin cerrar la pestaña. Si la sesión se pierde, vuelve a subirlas.'); document.querySelector('.card').prepend(n); }
   if(!/Mobi|Android|iPhone|iPad/i.test(navigator.userAgent)){ $('#phone').hidden=false; $('#phoneQr').src='/api/qr?text='+encodeURIComponent(`${info.base_url}/restore?s=${sid}`); }
   render(st); poll();
 }

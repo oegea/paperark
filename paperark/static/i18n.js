@@ -62,6 +62,8 @@ window.I18N = (function () {
     "Celda {cell} px ({mm} mm) · corrección {ecc} · {parity} hoja(s) de paridad · {paper}": "Cell {cell} px ({mm} mm) · correction {ecc} · {parity} parity sheet(s) · {paper}", "La compresión puede reducir el número de hojas.": "Compression may reduce the number of sheets.",
     "{size} · {t} hojas ({d} de datos + {p} de paridad) · celda {mm} mm": "{size} · {t} sheets ({d} data + {p} parity) · {mm} mm cell", "datos": "data", "paridad": "parity",
     "{name} · {t} hojas · {pdf} de PDF": "{name} · {t} sheets · {pdf} PDF", "sí": "yes", "no": "no", "· {done} de {total} hojas": "· {done} of {total} sheets",
+    "Generando el PDF… (sin barra de progreso en este servidor)": "Generating the PDF… (no progress bar on this server)",
+    "Este servidor no guarda estado entre peticiones: sube todas las hojas seguidas y sin cerrar la pestaña. Si la sesión se pierde, vuelve a subirlas.": "This server keeps no state between requests: upload all the sheets in a row without closing the tab. If the session is lost, upload them again.",
     "tipo desconocido": "unknown type", "Quitar": "Remove", "Error: {e}": "Error: {e}",
     // --- recuperar
     "Identificar el backup": "Identify the backup", "Capturar las hojas": "Capture the sheets", "Descargar y verificar": "Download and verify",

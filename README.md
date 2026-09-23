@@ -93,6 +93,10 @@ paperark.tu-dominio.com {
 }
 ```
 
+### Vercel (preset FastAPI)
+
+Funciona con limitaciones. El repositorio ya incluye `main.py` (expone `app`) y `vercel.json` (60 s por petición, 1 GB). En el proyecto de Vercel: preset **FastAPI**, variable de entorno `PAPERARK_BASE_URL=https://tu-proyecto.vercel.app` (o tu dominio). Al no haber procesos persistentes, la web detecta el modo serverless y genera el PDF en una sola petición (sin barra de progreso; ficheros grandes pueden superar los 60 s) y la sesión de recuperación puede perderse si las peticiones caen en instancias distintas. Para uso serio, un contenedor persistente (Fly.io, Railway, Render, VPS) es mejor opción.
+
 ### Sin Docker
 
 ```bash

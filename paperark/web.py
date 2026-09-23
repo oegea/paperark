@@ -46,6 +46,8 @@ def base_url_for(request: Request) -> str:
         return env.rstrip("/")
     host = request.headers.get("host", "")
     scheme = request.headers.get("x-forwarded-proto", request.url.scheme)
+    if os.environ.get("VERCEL"):
+        scheme = "https"
     if host.startswith("127.0.0.1") or host.startswith("localhost"):
         port = host.split(":")[1] if ":" in host else "80"
         host = f"{lan_ip()}:{port}"
@@ -102,9 +104,14 @@ def api_qr(text: str):
     return Response(buf.getvalue(), media_type="image/png")
 
 
+SERVERLESS = bool(os.environ.get("VERCEL") or os.environ.get("PAPERARK_SERVERLESS"))
+
+
 @app.get("/api/info")
 def api_info(request: Request):
-    return {"base_url": base_url_for(request), "lan_ip": lan_ip()}
+    # serverless: sin procesos persistentes; la web genera el PDF en una sola
+    # petición y avisa de que la sesión de recuperación puede perderse
+    return {"base_url": base_url_for(request), "lan_ip": lan_ip(), "serverless": SERVERLESS}
 
 
 @app.get("/api/profiles")

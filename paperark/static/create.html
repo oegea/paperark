@@ -154,7 +154,7 @@
 <div class="toast" id="toast"></div>
 <script>
 const $=s=>document.querySelector(s), $$=s=>[...document.querySelectorAll(s)];
-const A={file:null, recover:null, print:null, life:null}; const T=(s,v)=>I18N.t(s,v); $('#pdflang').value=I18N.lang;
+const A={file:null, recover:null, print:null, life:null}; const T=(s,v)=>I18N.t(s,v); $('#pdflang').value=I18N.lang; let SERVERLESS=false; fetch('/api/info').then(r=>r.json()).then(j=>{SERVERLESS=!!j.serverless;}).catch(()=>{});
 let step=1;
 function fmt(n){return n==null?'—':n<1024?n+' B':n<1048576?(n/1024).toFixed(1)+' KB':(n/1048576).toFixed(2)+' MB'}
 function toast(t){const e=$('#toast');e.textContent=t;e.classList.add('show');clearTimeout(e._t);e._t=setTimeout(()=>e.classList.remove('show'),2400)}
@@ -193,6 +193,11 @@ $('#desc').addEventListener('input',()=>{$('#cvDesc').textContent=$('#desc').val
 $('#btnGen').onclick=async()=>{ const fd=new FormData(); fd.append('file',A.file); fd.append('paper',$('#paper').value); fd.append('cell',$('#cell').value); fd.append('ecc',$('#ecc').value); fd.append('parity',$('#parity').value);
   fd.append('compress',$('#compress').checked); fd.append('spec_page',$('#cover_on').checked); fd.append('cover',$('#cover_on').checked); fd.append('description',$('#desc').value); fd.append('lang',$('#pdflang').value);
   $('#genBtns').style.display='none'; $('#gen').classList.add('show'); $('#gstage').textContent=T('Subiendo el fichero…');
+  if(SERVERLESS){ // sin procesos persistentes: una sola petición, progreso indeterminado
+    $('#gbar').style.width='100%'; $('#gbar').classList.add('indet'); $('#gpct').textContent='…'; $('#gstage').textContent=T('Generando el PDF… (sin barra de progreso en este servidor)');
+    const r=await fetch('/api/encode',{method:'POST',body:fd}); if(!r.ok){toast(T('Error: {e}',{e:await r.text()}));$('#genBtns').style.display='';$('#gen').classList.remove('show');return;}
+    const blob=await r.blob(); const url=URL.createObjectURL(blob); const h=k=>r.headers.get(k);
+    finish(null,{total_pages:+h('X-Total-Pages'),data_pages:+h('X-Data-Pages'),parity_pages:+h('X-Parity-Pages'),file_sha256:h('X-File-Sha256'),compressed:h('X-Compressed')==='true',pdf_bytes:blob.size,_url:url,_name:(h('Content-Disposition')||'').match(/filename="(.+)"/)?.[1]||'backup.paperark.pdf'}); return; }
   const r=await fetch('/api/jobs/encode',{method:'POST',body:fd}); if(!r.ok){toast(T('Error: {e}',{e:await r.text()}));$('#genBtns').style.display='';$('#gen').classList.remove('show');return;}
   const {job}=await r.json(); let pagesN=0;
   const tick=async()=>{ const j=await (await fetch('/api/jobs/'+job)).json();
@@ -206,5 +211,5 @@ function confetti(){ const c=document.createElement('div'); c.className='confett
 function cap(s){return s? s[0].toUpperCase()+s.slice(1):''}
 function finish(job,s){ $('#gen').classList.remove('show'); $('.preview').hidden=true; $('#done').classList.add('show'); confetti(); $('#doneSub').textContent=T('{name} · {t} hojas · {pdf} de PDF',{name:A.file.name,t:s.total_pages,pdf:fmt(s.pdf_bytes)});
   $('#doneStat').innerHTML=`<div><b>${s.total_pages}</b>${T('hojas')}</div><div><b>${s.data_pages}</b>${T('de datos')}</div><div><b>${s.parity_pages}</b>${T('de paridad')}</div><div><b>${s.compressed?T('sí'):T('no')}</b>${T('comprimido')}</div>`;
-  $('#doneSha').textContent='SHA-256 '+s.file_sha256; $('#btnDl').onclick=()=>{ const a=document.createElement('a'); a.href='/api/jobs/'+job+'/file'; a.download=''; a.click(); }; $('#btnDl').click(); }
+  $('#doneSha').textContent='SHA-256 '+s.file_sha256; $('#btnDl').onclick=()=>{ const a=document.createElement('a'); if(s._url){a.href=s._url;a.download=s._name;} else {a.href='/api/jobs/'+job+'/file';a.download='';} a.click(); }; $('#btnDl').click(); }
 </script><script src="/static/fx.js" defer></script></body></html>
