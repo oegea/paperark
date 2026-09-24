@@ -20,7 +20,7 @@ a{color:var(--acc);text-decoration:none}
 .top nav{display:flex;gap:14px;white-space:nowrap;align-items:center;overflow-x:auto;scrollbar-width:none;max-width:70vw}
 .top nav::-webkit-scrollbar{display:none}
 .top nav a{color:var(--muted);font-size:14px;font-weight:500;flex:none}
-@media (max-width:520px){.top nav{gap:12px}.top nav a{font-size:13px}.top nav .long{display:none}.top nav .short{display:inline!important}}
+@media (max-width:520px){.top nav{gap:11px;max-width:none}.top nav a{font-size:13px}.top nav .long{display:none}.top nav .short{display:inline!important}.brand .name{display:none}}
 .top nav a:hover,.top nav a.on{color:var(--ink)}
 h1{font-size:clamp(30px,6.4vw,50px);line-height:1.05;margin:8px 0 12px;letter-spacing:-1.2px;font-weight:800}
 h2{font-size:22px;margin:0 0 8px;letter-spacing:-.4px;font-weight:700}
