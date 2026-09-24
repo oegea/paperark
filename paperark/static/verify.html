@@ -4,9 +4,18 @@
 <style>.res{margin-top:16px;padding:18px;border-radius:14px;background:var(--bg2);border:1px solid var(--line);animation:rise .5s both}.res.ok{border-color:var(--ok)}.res.bad{border-color:var(--bad)}.res h2{margin:0 0 6px}.hash{word-break:break-all}</style></head>
 <body><div class="wrap">
   <div class="top"><a class="brand" href="/"><span class="logo">P</span><span class="name">PaperArk</span></a><nav><a href="/create">Crear</a><a href="/restore">Recuperar</a><a href="/verify" class="on">Verificar</a><a href="/how"><span class="long">Cómo funciona</span><span class="short" hidden>Guía</span></a></nav></div>
-  <h1>Verificar un fichero</h1>
-  <p class="lead">Comprueba que el fichero recuperado coincide bit a bit con el original: su huella SHA-256 debe ser la que aparece en la portada del backup.</p>
+  <h1>Comprobar un backup</h1>
+  <p class="lead">Dos comprobaciones distintas: el estado de las hojas de papel, y la integridad de un fichero digital.</p>
   <section class="card">
+    <div class="kicker">Hojas impresas</div>
+    <h2>¿Siguen sanas mis hojas?</h2>
+    <p class="muted">Fotografía o escanea las hojas (todas o algunas) y verás, hoja por hoja, cuánto margen de corrección les queda. Hazlo al imprimir, para confirmar que el papel se lee, y cada pocos años. Si una hoja baja del 30 %, reimprímela desde el PDF original.</p>
+    <a class="btn primary lg" href="/restore?check=1">📷 Comprobar las hojas</a>
+  </section>
+  <section class="card">
+    <div class="kicker">Fichero digital</div>
+    <h2>¿Este fichero es el del backup?</h2>
+    <p class="muted">Compara la huella SHA-256 de un fichero (el recuperado, o el original que guardas en otro sitio) con la impresa en la portada. Si coincide, es idéntico bit a bit.</p>
     <label>Huella esperada (de la portada; vale el principio)</label><input type="text" id="sha" class="mono" placeholder="0ea3595a 61383da3 …">
     <div class="drop" id="drop">Arrastra aquí el fichero recuperado o toca para elegirlo<input type="file" id="file" hidden></div>
     <div id="out"></div>

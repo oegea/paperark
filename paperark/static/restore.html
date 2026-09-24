@@ -40,11 +40,19 @@
   .hint{font-size:14px;color:var(--muted);flex:1;min-width:200px}
   .missing{margin-top:10px;font-size:14px;color:var(--ink2)}.missing b{color:var(--warn)}
   .status-line{margin-top:8px;min-height:22px;color:var(--muted);font-size:14px}
+  .health{margin-top:18px;padding:14px 16px;border:1px solid var(--line);border-radius:14px;background:var(--bg);animation:rise .5s var(--ease)}
+  .health .hh{display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:10px}
+  .hbars{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:8px 14px}
+  .hb{font-size:12.5px;color:var(--ink2);display:grid;grid-template-columns:auto 1fr auto;gap:8px;align-items:center}
+  .hb .bar{height:8px}.hb .bar i{transition:width .8s var(--ease)}
+  .hb.ok .bar i{background:var(--ok)}.hb.mid .bar i{background:var(--warn)}.hb.bad .bar i{background:var(--bad)}.hb.rec .bar i{background:var(--acc2)}
+  .check-banner{margin-bottom:14px;padding:12px 14px;border-radius:14px;background:var(--acc-soft);color:var(--acc);font-size:14px}
 </style></head>
 <body><div class="wrap">
   <div class="top"><a class="brand" href="/"><span class="logo">P</span><span class="name">PaperArk</span></a><nav><a href="/create">Crear</a><a href="/restore" class="on">Recuperar</a><a href="/verify">Verificar</a><a href="/how"><span class="long">Cómo funciona</span><span class="short" hidden>Guía</span></a></nav></div>
   <div class="phases"><div class="phase on" id="ph1"><b>1</b><span>Identificar el backup</span></div><div class="phase" id="ph2"><b>2</b><span>Capturar las hojas</span></div><div class="phase" id="ph3"><b>3</b><span>Descargar y verificar</span></div></div>
 
+  <div class="check-banner" id="checkBanner" hidden><b>Modo comprobación:</b> fotografía o escanea las hojas impresas y verás el estado de cada una. No hace falta recuperar el fichero.</div>
   <section class="card">
     <div class="file">
       <div class="ring"><svg width="96" height="96" viewBox="0 0 96 96"><defs><linearGradient id="g" x1="0" x2="1"><stop offset="0" stop-color="#4f46e5"/><stop offset="1" stop-color="#0ea5a3"/></linearGradient></defs><circle class="bg" cx="48" cy="48" r="42"/><circle class="fg" id="ringFg" cx="48" cy="48" r="42"/></svg><div class="pct" id="pct">0%</div></div>
@@ -57,6 +65,11 @@
     </div>
     <div class="sheets" id="sheets"></div>
     <div class="missing" id="missing"></div>
+    <div class="health" id="health" hidden>
+      <div class="hh"><b>Salud del backup en papel</b><span id="healthVerdict" class="pill"></span></div>
+      <div class="hbars" id="hbars"></div>
+      <p class="note" id="healthNote">Cada barra es el margen de corrección que le queda a la hoja tras leerla: 100 % = sin errores; por debajo del 30 % conviene reimprimirla.</p>
+    </div>
     <div class="done" id="done">
       <div class="check">✓</div>
       <h2>Fichero reconstruido y verificado</h2>
@@ -114,7 +127,7 @@ async function rasterizePdf(file){ // PDF de escáner -> PNG por página (pdf.js
     const blob=await new Promise(r=>c.toBlob(r,'image/png')); out.push({name:`${file.name}#${i}`,data:await blob.arrayBuffer()}); c.width=c.height=0; }
   return out; }
 const params=new URLSearchParams(location.search);
-const hashMeta=(location.hash.match(/m=([^&]+)/)||[])[1];
+const hashMeta=(location.hash.match(/m=([^&]+)/)||[])[1]; const CHECK=params.get('check')==='1'; if(CHECK){ document.getElementById('checkBanner').hidden=false; document.getElementById('ph3').querySelector('span').textContent='Resultado'; }
 function fmt(n){return n==null?'—':n<1024?n+' B':n<1048576?(n/1024).toFixed(1)+' KB':(n/1048576).toFixed(2)+' MB'}
 function toast(t){const e=$('#toast');e.textContent=t;e.classList.add('show');clearTimeout(e._t);e._t=setTimeout(()=>e.classList.remove('show'),2600)}
 async function init(){
@@ -157,8 +170,21 @@ function render(s){
   $('#missing').innerHTML = s.complete ? (miss.length||s.partial.length?'<b style="color:var(--acc2)">'+T('Faltan {n} hoja(s) de datos, pero la paridad permite reconstruirlas.',{n:miss.length})+'</b>':'')
     : miss.length ? T('Faltan las hojas {list}',{list:'<b>'+miss.slice(0,30).join(', ')+(miss.length>30?'…':'')+'</b>'})+(s.parity_pages?T(' · con paridad bastan {n} hoja(s) más de datos o paridad',{n:g.reduce((a,x)=>a+x.still_needed,0)}):'') : '';
   $('#btnLost').hidden=!(s.strict&&s.parity_pages>0&&!s.complete);
+  renderHealth(s);
   if(s.complete&&!$('#done').classList.contains('show')){ $('#done').classList.add('show'); $('#doneSub').textContent=`${s.filename} · ${fmt(s.file_size)}${miss.length||s.partial.length?T(' · reconstruido con paridad'):''}`; $('#doneSha').textContent=T('SHA-256 esperado {h}',{h:s.file_sha256}); confetti(); }
 }
+function marginTxt(st,rep){ const x=st&&st.sheets&&rep.page_index!=null?st.sheets[rep.page_index]:null; return (x&&x.health!=null&&rep.status==='accepted')?' · '+T('margen {p} %',{p:x.health}):''; }
+function renderHealth(s){ const H=$('#health'); const sh=s.sheets||{}; const ids=Object.keys(sh).map(Number).sort((a,b)=>a-b); if(!ids.length){H.hidden=true;return;} H.hidden=false;
+  const B=$('#hbars'); B.innerHTML=''; let worst=100, weak=[];
+  for(const i of ids){ const x=sh[i]; const d=document.createElement('div'); let cls,pct,label;
+    if(x.recovered){cls='rec';pct=100;label=T('reconstruida');} else { pct=x.health; cls=pct>=60?'ok':pct>=30?'mid':'bad'; label=pct+' %'; worst=Math.min(worst,pct); if(pct<30) weak.push(i+1); }
+    d.className='hb '+cls; d.innerHTML=`<span>${T('Hoja')} ${i+1}</span><div class="bar"><i style="width:${pct}%"></i></div><span>${label}</span>`;
+    d.title=x.recovered?T('Reconstruida con paridad'):T('{c} de {cap} símbolos corregidos en el peor bloque · {e} % de celdas ilegibles · {m} % de marcadores',{c:x.max_corrected,cap:x.capacity,e:x.erased_pct,m:x.markers_pct}); B.appendChild(d); }
+  const v=$('#healthVerdict'); const okData=s.accepted.filter(i=>i<s.data_pages).length;
+  if(weak.length){ v.className='pill bad'; v.textContent=T('Reimprime las hojas {list}',{list:weak.join(', ')}); }
+  else if(worst<60){ v.className='pill warn'; v.textContent=T('Legible, con desgaste'); }
+  else { v.className='pill ok'; v.textContent=T('En buen estado'); }
+  if(s.complete && !weak.length) v.textContent+=' · '+T('el fichero se puede recuperar'); }
 function addItem(cls,text,src){const q=$('#queue');const e=document.createElement('div');e.className='item '+cls;e.innerHTML=`<span class="dot"></span><span></span><span class="src"></span>`;e.children[1].textContent=text;e.children[2].textContent=src||'';q.prepend(e);while(q.children.length>60)q.lastChild.remove();return e;}
 let busySheet=null; function mark(){ if(!st||!st.started)return; const S=$('#sheets'); const i=st.missing_data.find(i=>!st.partial.includes(i)); if(i!=null&&S.children[i]){busySheet=S.children[i];busySheet.classList.add('busy');} }
 function unmark(){ if(busySheet){busySheet.classList.remove('busy');busySheet=null;} }
@@ -169,12 +195,12 @@ async function upload(files){
       if(LOCAL){
         const items = (f.type==='application/pdf'||/\.pdf$/i.test(f.name)) ? await rasterizePdf(f) : [{name:f.name||'foto.jpg',data:await f.arrayBuffer()}];
         it.remove();
-        for(const im of items){ const r=await wsend({type:'submit',name:im.name,data:im.data},[im.data]); for(const rep of r.reports){ addItem(rep.status, rep.message, rep.source||im.name); if(rep.status==='accepted'||rep.status==='cover') toast(rep.message); } render(r.status); }
+        for(const im of items){ const r=await wsend({type:'submit',name:im.name,data:im.data},[im.data]); for(const rep of r.reports){ addItem(rep.status, rep.message+marginTxt(r.status,rep), rep.source||im.name); if(rep.status==='accepted'||rep.status==='cover') toast(rep.message); } render(r.status); }
       } else {
         const fd=new FormData(); fd.append('file',f,f.name||'foto.jpg');
         const r=await fetch(`/api/restore/${sid}/page`,{method:'POST',body:fd});
         if(!r.ok){ let msg; try{ msg=(await r.clone().json()).detail; }catch(x){} if(!msg) msg=(await r.text()).slice(0,200)||('HTTP '+r.status); it.className='item rejected'; it.children[1].textContent=msg; }
-        else{ const j=await r.json(); it.remove(); for(const rep of j.reports){ addItem(rep.status, rep.message, rep.source||f.name); if(rep.status==='accepted'||rep.status==='cover') toast(rep.message); } render(j.status); }
+        else{ const j=await r.json(); it.remove(); for(const rep of j.reports){ addItem(rep.status, rep.message+marginTxt(j.status,rep), rep.source||f.name); if(rep.status==='accepted'||rep.status==='cover') toast(rep.message); } render(j.status); }
       }
     }catch(e){ it.className='item rejected'; it.children[1].textContent=T('Error de red: {e}',{e:e.message||e}); }
     busy--; unmark(); if(!busy){$('#working').classList.remove('show'); $('#wbar').style.width='0';} }

@@ -66,6 +66,7 @@ class RestoreSession:
         self.cover: dict | None = None    # metadatos del QR de la portada (sin confirmar por una hoja)
         self.updated = time.time()
         self.current: dict | None = None  # {"source", "stage", "pct"} mientras se procesa una imagen
+        self._cells = 0
 
     # ------------------------------------------------------------------
     @property
@@ -163,6 +164,12 @@ class RestoreSession:
         st = {k: v for k, v in res.stats.items() if k != "failed_codewords"}
         st["failed_codewords"] = len(res.failed_codewords)
         if self.meta is None:
+            self._cells = 0
+            try:
+                from .layout import get_layout
+                Lx = get_layout(res.profile.paper, h.cell); self._cells = Lx.rows * Lx.cols
+            except Exception:
+                pass
             if self.cover is not None and self.cover.get("h") != h.file_sha256.hex():
                 return Report("rejected", self.t("not_cover_file", name=self.cover.get("n")),
                               h.page_index, h.total_pages, st, source)
@@ -246,6 +253,21 @@ class RestoreSession:
         partial = sorted(i for i, p in self.pages.items() if not p.good)
         missing_data = [i for i in range(m.data_pages) if i not in good]
         rec = self._recoverability()
+        cap = (255 - m.k) // 2
+        sheets = {}
+        for i, p in self.pages.items():
+            st = p.stats or {}
+            if p.recovered:
+                sheets[i] = {"recovered": True}
+                continue
+            mx = int(st.get("max_corrected", 0)); cw = int(st.get("codewords", 1)) or 1
+            erased = float(st.get("erased_cells", 0)) / max(1.0, float(st.get("cells", 0) or (self._cells or 1)))
+            markers = float(st.get("markers_found", 0)) / max(1.0, float(st.get("markers_total", 1)))
+            failed = int(st.get("failed", 0))
+            margin = 0.0 if failed else max(0.0, 1.0 - mx / cap)
+            health = round(100 * min(margin, markers, 1.0 - min(1.0, erased * 3)))
+            sheets[i] = {"health": health, "max_corrected": mx, "capacity": cap, "failed": failed, "codewords": cw,
+                         "erased_pct": round(100 * erased, 1), "markers_pct": round(100 * markers), "sym_err_pct": round(100 * float(st.get("symbol_error_rate", 0.0)), 2)}
         complete = all(i in good for i in range(m.data_pages)) or rec["recoverable"]
         base.update({
             "started": True, "complete": complete, "from_cover": False,
@@ -256,7 +278,7 @@ class RestoreSession:
             "parity_per_group": m.parity_pages, "groups": n_groups,
             "accepted": good, "partial": partial, "missing_data": missing_data,
             "lost": sorted(self.lost), "expected": self.expected if self.strict else None,
-            "recovery": rec,
+            "recovery": rec, "sheets": sheets,
         })
         return base
 
