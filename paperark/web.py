@@ -100,8 +100,9 @@ def api_license():
     return Response(open(os.path.join(root, "LICENSE"), encoding="utf-8").read(), media_type="text/plain; charset=utf-8")
 
 
+@app.get("/verify", response_class=HTMLResponse)
 @app.get("/verify/{sha}", response_class=HTMLResponse)
-def verify_page(sha: str):
+def verify_page(sha: str = ""):
     return page("verify.html")
 
 

@@ -5,7 +5,7 @@
 window.I18N = (function () {
   const D = {
     // --- navegación y comunes
-    "Crear": "Create", "Recuperar": "Recover", "Cómo funciona": "How it works", "Guía": "Guide", "Inicio": "Home",
+    "Crear": "Create", "Verificar": "Verify", "Recuperar": "Recover", "Cómo funciona": "How it works", "Guía": "Guide", "Inicio": "Home",
     "Vibe coded by": "Vibe coded by", "MIT license": "MIT license", "Código": "Source", "Cargando…": "Loading…",
     "Continuar →": "Continue →", "← Atrás": "← Back", "Ver resumen →": "See summary →", "recomendado": "recommended",
     "hojas": "sheets", "de paridad": "parity", "de datos": "data", "KB por hoja": "KB per sheet", "comprimido": "compressed",
