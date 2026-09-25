@@ -50,26 +50,36 @@ class EncodeResult:
     page_hashes: list[str] = field(default_factory=list)
     meta: dict = field(default_factory=dict)
     qr_url: str = ""
+    sheets: int = 0           # hojas físicas (formato 2: total_pages cuenta bloques)
+    panels: int = 0
+    compression: str = ""
 
 
-def build_stream(data: bytes, filename: str, compress=True, description: str = "") -> tuple[bytes, str]:
-    """compress: True/"zstd", "deflate" o False/"none". Devuelve (flujo, compresión usada)."""
+def build_stream(data: bytes, filename: str, compress=True, description: str = "", fmt: int = 1,
+                 progress=None) -> tuple[bytes, str]:
+    """compress: True/"best" (prueba todos y se queda el menor), un método concreto
+    ("zstd", "xz", "brotli", "bzip2", "deflate") o False/"none". En el formato 1
+    True significa zstd (compatibilidad). Devuelve (flujo, compresión usada)."""
+    from .compress import compress_best
     sha = hashlib.sha256(data).hexdigest()
     body = data
     used = "none"
-    method = "zstd" if compress is True else (compress or "none")
+    if compress is True:
+        method = "best" if fmt == 2 else "zstd"
+    else:
+        method = compress or "none"
     if method != "none" and len(data) > 64:
-        if method == "deflate":
-            import zlib
-            c = zlib.compress(data, 9)
-        else:
+        if fmt == 1 and method == "zstd":
             c = zstandard.ZstdCompressor(level=19).compress(data)
-        if len(c) < len(data) * 0.97:
-            body, used = c, method
+            if len(c) < len(data) * 0.97:
+                body, used = c, method
+        else:
+            from .compress import METHODS
+            used, body = compress_best(data, METHODS if method == "best" else (method,), progress)
     manifest = json.dumps({
         "name": filename, "size": len(data), "sha256": sha,
         "compression": used, "created": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
-        "format": "PAPERARK/1", "description": description[:2000],
+        "format": f"PAPERARK/{fmt}", "description": description[:2000],
     }, ensure_ascii=False).encode("utf-8")
     stream = len(manifest).to_bytes(4, "little") + manifest + body
     return stream, used
@@ -78,9 +88,14 @@ def build_stream(data: bytes, filename: str, compress=True, description: str = "
 def encode_file(data: bytes, filename: str, paper: str = "A4", cell: int = 4, ecc: str = "M",
                 parity_pages: int = 0, compress: bool = True, spec_page: bool = True,
                 title: str | None = None, base_url: str | None = None, cover: bool = True,
-                description: str = "", progress=None, lang: str = "es") -> EncodeResult:
-    """progress(stage: str, done: int, total: int) se llama al avanzar (opcional). lang: "es" | "en" (textos del PDF)."""
+                description: str = "", progress=None, lang: str = "es", panels: int = 0) -> EncodeResult:
+    """progress(stage: str, done: int, total: int) se llama al avanzar (opcional). lang: "es" | "en" (textos del PDF).
+    panels: 0 = formato 1 (hoja completa, Reed-Solomon); 1, 2 o 4 = formato 2 (bloques
+    fotografiables por separado, LDPC, ecualización; `parity_pages` cuenta BLOQUES)."""
     lang = norm(lang)
+    if panels:
+        return _encode_v2(data, filename, paper, cell, ecc, parity_pages, compress, spec_page, title, base_url,
+                          cover, description, progress, lang, panels)
 
     def report(stage, done, total):
         if progress:
@@ -160,4 +175,100 @@ def estimate(size: int, paper: str = "A4", cell: int = 4, ecc: str = "M", parity
     D = max(1, math.ceil((size + 300) / P))
     total, n_groups, _ = plan_pages(D, parity_pages)
     return {"payload_per_page": P, "data_pages": D, "parity_pages": total - D, "total_pages": total,
+            "layout": layout.describe()}
+
+
+# ----------------------------------------------------------------------
+def _encode_v2(data, filename, paper, cell, ecc, parity_units, compress, spec_page, title, base_url, cover,
+               description, progress, lang, panels) -> EncodeResult:
+    from .codec2 import BlockCodec, COMPRESSION_IDS, ECC2, FLAG_PARITY as F2_PARITY, HeaderV2, RATES
+    from .render import render_sheet
+
+    def report(stage, done, total):
+        if progress:
+            progress(msg(lang, stage), done, total)
+    layout = get_layout(paper, cell, panels=panels)
+    rate_id = ECC2[ecc]
+    codec = BlockCodec(layout, rate_id)
+    P = codec.payload_len
+    description = (description or "").strip()
+    report("en_compress", 0, 1)
+    stream, used = build_stream(data, filename, compress, description, fmt=2)
+    file_sha = hashlib.sha256(data).digest()
+    D = max(1, math.ceil(len(stream) / P))
+    if parity_units >= MAX_GROUP:
+        raise ValueError("demasiados bloques de paridad por grupo (máx 254)")
+    total, n_groups, groups = plan_pages(D, parity_units)
+    sheets = math.ceil(total / panels)
+    base_url = (base_url or DEFAULT_BASE_URL).rstrip("/")
+    comp_id = COMPRESSION_IDS.get(used, 0)
+    payloads, headers, grids, labels = [], [], [], []
+    steps = total + sheets + 2
+
+    def add_unit(idx, chunk, flags, kind):
+        h = HeaderV2(idx, total, D, parity_units, len(chunk), len(stream), file_sha, hashlib.sha256(chunk).digest(),
+                     cell, rate_id, panels, flags, comp_id, filename)
+        grids.append(codec.encode(h, chunk))
+        headers.append(h)
+        labels.append(dict(sheet=idx // panels, total_sheets=sheets, panel=idx % panels, panels=panels,
+                           filename=filename, kind=kind, unit_sha=hashlib.sha256(chunk).hexdigest(), lang=lang))
+
+    for i in range(D):
+        report("en_data", i, steps)
+        chunk = stream[i * P:(i + 1) * P]
+        payloads.append(chunk)
+        add_unit(i, chunk, 0, pdf_t(lang, "kind_data"))
+    idx = D
+    for g, (start, n) in enumerate(groups):
+        mat = np.zeros((n, P), dtype=np.uint8)
+        for j in range(n):
+            pl = payloads[start + j]
+            mat[j, :len(pl)] = np.frombuffer(pl, dtype=np.uint8)
+        report("en_parity_calc", idx, steps)
+        par = rs_encode_columns(mat, parity_units)
+        for j in range(parity_units):
+            report("en_parity", idx, steps)
+            add_unit(idx, par[j].tobytes(), F2_PARITY, pdf_t(lang, "kind_parity", g=g + 1))
+            idx += 1
+    pages_img = []
+    for sh in range(sheets):
+        report("en_render", total + sh, steps)
+        sl = slice(sh * panels, (sh + 1) * panels)
+        pages_img.append(render_sheet(layout, grids[sl], labels[sl]))
+    grids.clear()
+    unit_hashes = [lab["unit_sha"] for lab in labels]
+    meta = make_meta(filename, len(data), file_sha.hex(), total, D, parity_units, cell, rate_id, used != "none", paper,
+                     description, panels=panels, compression=used)
+    url = meta_url(meta, base_url)
+    front, back = [], []
+    report("en_cover", total + sheets, steps)
+    letters = "ABCD"
+    index_rows = [(f"{i // panels + 1}" + (f"·{letters[i % panels]}" if panels > 1 else ""), i < D, hsh)
+                  for i, hsh in enumerate(unit_hashes)]
+    if cover:
+        front.append(render_cover(layout.page_w, layout.page_h, filename=filename, size=len(data), sha256_hex=file_sha.hex(),
+                                  total_pages=sheets, data_pages=math.ceil(D / panels), parity_pages=sheets - math.ceil(D / panels),
+                                  cell=cell, k=rate_id, compressed=used != "none", qr_text=url, base_url=base_url,
+                                  page_hashes=unit_hashes, description=description, lang=lang, panels=panels,
+                                  rate=RATES[rate_id], index_rows=index_rows, compression=used))
+        back.append(render_howto(layout.page_w, layout.page_h, base_url, lang=lang, panels=panels))
+    if spec_page:
+        back.append(render_spec(layout.page_w, layout.page_h, spec_text(lang, version=2), lang=lang, version=2))
+    report("en_pdf", steps - 1, steps)
+    pdf = write_pdf(front + pages_img + back, title or (f"Paper backup: {filename}" if lang == "en" else f"Backup en papel: {filename}"))
+    report("en_done", steps, steps)
+    info = layout.describe()
+    info.update({"sheets": sheets, "units": total, "rate": RATES[rate_id], "compression": used})
+    return EncodeResult(pdf, D, total - D, total, P, file_sha.hex(), used != "none", len(stream), info, unit_hashes, meta, url,
+                        sheets=sheets, panels=panels, compression=used)
+
+
+def estimate2(size: int, paper: str = "A4", cell: int = 4, ecc: str = "M", parity_units: int = 0, panels: int = 4) -> dict:
+    from .codec2 import BlockCodec, ECC2, RATES
+    layout = get_layout(paper, cell, panels=panels)
+    P = BlockCodec(layout, ECC2[ecc]).payload_len
+    D = max(1, math.ceil((size + 300) / P))
+    total, n_groups, _ = plan_pages(D, parity_units)
+    return {"payload_per_unit": P, "payload_per_sheet": P * panels, "data_units": D, "parity_units": total - D,
+            "total_units": total, "sheets": math.ceil(total / panels), "panels": panels, "rate": RATES[ECC2[ecc]],
             "layout": layout.describe()}

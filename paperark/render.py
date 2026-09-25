@@ -51,6 +51,23 @@ def render_page(layout: Layout, grid: np.ndarray, text_lines: list[str] | None =
     return np.asarray(img)
 
 
+def render_sheet(layout: Layout, grids: list[np.ndarray], labels: list[dict]) -> np.ndarray:
+    """Formato 2: una hoja con `layout.panels` bloques. grids[i] = rejilla del
+    bloque i (1 = negro); labels[i] = argumentos de cover.render_panel_label.
+    Los huecos del último pliego (menos bloques que posiciones) quedan en blanco."""
+    from .cover import render_panel_label
+    L = layout
+    page = np.full((L.page_h, L.page_w), 255, dtype=np.uint8)
+    for (x, y), grid in zip(L.panel_origins, grids):
+        big = np.kron(grid.astype(np.uint8), np.ones((L.cell, L.cell), dtype=np.uint8))
+        h, w = big.shape
+        page[y:y + h, x:x + w] = np.where(big == 1, 0, 255)
+    img = Image.fromarray(page)
+    for rect, lab in zip(L.label_rects, labels):
+        render_panel_label(img, rect, **lab)
+    return np.asarray(img)
+
+
 def render_text_page(paper_w: int, paper_h: int, text: str, size: int = 40, margin_mm: float = 15.0) -> np.ndarray:
     img = Image.new("L", (paper_w, paper_h), 255)
     draw = ImageDraw.Draw(img)

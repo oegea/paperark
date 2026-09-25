@@ -64,9 +64,10 @@
     <div class="kicker">Paso 2 de 5</div><h2>¿Cómo vas a recuperarlo?</h2>
     <p class="muted">Esto decide el tamaño de las celdas impresas y, por tanto, cuántas hojas ocupará.</p>
     <div class="opts" data-q="recover">
-      <div class="opt" data-v="phone"><span class="tag">recomendado</span><span class="tick">✓</span><span class="ic">📱</span><h3>Con el móvil</h3><p>Fotografiando cada hoja. Cualquier cámara de 8 MP o más. Unos 34 KB por hoja.</p></div>
-      <div class="opt" data-v="scanner"><span class="tick">✓</span><span class="ic">🖨️</span><h3>Con un escáner</h3><p>A 600 dpi. Cuatro veces más denso: unos 143 KB por hoja.</p></div>
-      <div class="opt" data-v="unsure"><span class="tick">✓</span><span class="ic">🛡️</span><h3>No lo sé, lo más seguro</h3><p>Celdas grandes que lee cualquier cámara o escáner, incluso mediocres. Unos 21 KB por hoja.</p></div>
+      <div class="opt" data-v="blocks"><span class="tag">recomendado</span><span class="tick">✓</span><span class="ic">📱</span><h3>Con el móvil, bloque a bloque</h3><p>Cada hoja tiene 4 bloques y haces una foto de cerca de cada uno; la pantalla te guía. Unos 157 KB por hoja.</p></div>
+      <div class="opt" data-v="phone1"><span class="tick">✓</span><span class="ic">📸</span><h3>Con el móvil, una foto por hoja</h3><p>Más rápido de recuperar, menos denso. Unos 55 KB por hoja.</p></div>
+      <div class="opt" data-v="scanner"><span class="tick">✓</span><span class="ic">🖨️</span><h3>Con un escáner</h3><p>A 600 dpi. La máxima densidad: unos 300 KB por hoja.</p></div>
+      <div class="opt" data-v="unsure"><span class="tick">✓</span><span class="ic">🛡️</span><h3>No lo sé, lo más seguro</h3><p>Celdas más grandes y 4 fotos por hoja: lo lee cualquier móvil o escáner, incluso mediocres. Unos 99 KB por hoja.</p></div>
     </div>
     <div class="nav-btns"><button class="btn ghost" data-back="1">← Atrás</button><button class="btn primary" id="n2" disabled>Continuar →</button></div>
   </section>
@@ -108,7 +109,7 @@
         <div class="mid"><div class="st"><b>Cómo recuperar el fichero</b>1 · Escanea el QR con la cámara del móvil<br>2 · Fotografía o escanea cada hoja, en cualquier orden<br>3 · Descarga el fichero y comprueba su huella</div><img class="q" src="/api/qr?text=https://paperark/restore" alt=""></div>
         <div class="sh"><b>Huella SHA-256 del fichero original</b><br>se calcula al generar el PDF<br>········ ········ ········ ········</div>
         <div class="ix" id="cvIndex"></div>
-        <div class="ft">Formato PAPERARK v1 · la última hoja contiene la especificación completa del formato</div>
+        <div class="ft">Formato PAPERARK v2 · la última hoja contiene la especificación completa del formato</div>
       </div>
       <div class="sum">
         <div class="stat" id="stat"><div><b class="skel">—</b>hojas</div><div><b class="skel">—</b>KB por hoja</div><div><b class="skel">—</b>de paridad</div></div>
@@ -117,12 +118,13 @@
         <div class="warnbox" id="warn"></div>
         <details><summary>Ajustes avanzados</summary>
           <div class="row">
-            <div><label>Celda (px a 600 dpi)</label><select id="cell"><option value="3">3 · 0,13 mm</option><option value="4">4 · 0,17 mm</option><option value="5">5 · 0,21 mm</option><option value="6">6 · 0,25 mm</option><option value="8">8 · 0,34 mm</option><option value="10">10 · 0,42 mm</option></select></div>
-            <div><label>Corrección por hoja</label><select id="ecc"><option value="L">L · 19 %</option><option value="M">M · 30 %</option><option value="H">H · 42 %</option><option value="X">X · 55 %</option></select></div>
-            <div><label>Hojas de paridad</label><input type="number" id="parity" min="0" max="120" value="2"></div>
+            <div><label>Bloques por hoja (fotos)</label><select id="panels"><option value="4">4 · una foto por bloque</option><option value="2">2 · mitades</option><option value="1">1 · hoja entera</option><option value="0">Formato 1 (lectores antiguos)</option></select></div>
+            <div><label>Celda (px a 600 dpi)</label><select id="cell"><option value="3">3 · 0,13 mm</option><option value="4">4 · 0,17 mm</option><option value="5">5 · 0,21 mm</option><option value="6">6 · 0,25 mm</option><option value="7">7 · 0,30 mm</option><option value="8">8 · 0,34 mm</option><option value="10">10 · 0,42 mm</option></select></div>
+            <div><label>Corrección</label><select id="ecc"><option value="L">L · mínima</option><option value="M">M · estándar</option><option value="H">H · alta</option><option value="X">X · máxima</option></select></div>
+            <div><label id="parityLabel">Bloques de paridad</label><input type="number" id="parity" min="0" max="254" value="4"></div>
             <div><label>Papel</label><select id="paper"><option value="A4">A4</option><option value="LETTER">Letter</option></select></div>
           </div>
-          <div class="toggle"><input type="checkbox" id="compress" checked><label for="compress" style="margin:0">Comprimir (zstd)</label></div>
+          <div class="toggle"><input type="checkbox" id="compress" checked><label for="compress" style="margin:0">Comprimir (se prueba zstd, xz, brotli y bzip2 y se queda el mejor)</label></div>
           <div class="toggle"><input type="checkbox" id="cover_on" checked><label for="cover_on" style="margin:0">Portada, explicación y especificación del formato</label></div>
         </details>
       </div>
@@ -173,27 +175,32 @@ $('#n1').onclick=()=>go(2);
 $$('.opts').forEach(g=>{ const q=g.dataset.q; g.querySelectorAll('.opt').forEach(o=>o.onclick=()=>{ g.querySelectorAll('.opt').forEach(x=>x.classList.remove('sel')); o.classList.add('sel'); A[q]=o.dataset.v; const n={recover:'#n2',print:'#n3',life:'#n4'}[q]; $(n).disabled=false; setTimeout(()=>$(n).click(),260); }); });
 $('#n2').onclick=()=>go(3); $('#n3').onclick=()=>go(4); $('#n4').onclick=()=>go(5);
 // derivar ajustes
-function derive(){ let cell={phone:8,scanner:4,unsure:10}[A.recover]||8, ecc='M', pct=0.2, minPar=2; const warns=[];
-  if(A.print==='inkjet'){ cell={3:4,4:5,5:6,6:8,8:10,10:10}[cell]; ecc='H'; warns.push(T('Con inyección de tinta usamos celdas más grandes y corrección alta. Usa papel para inyección de buena calidad y deja secar antes de guardar.')); }
+function derive(){ let [panels,cell]={blocks:[4,4],phone1:[1,7],scanner:[1,3],unsure:[4,5]}[A.recover]||[4,4], ecc='M', pct=0.2, minSheets=1; const warns=[];
+  if(A.print==='inkjet'){ cell=Math.min(8,cell+1); ecc='H'; warns.push(T('Con inyección de tinta usamos celdas más grandes y corrección alta. Usa papel para inyección de buena calidad y deja secar antes de guardar.')); }
   if(A.print==='shop') warns.push(T('Pide explícitamente impresión láser al 100 % de escala, sin márgenes automáticos ni "ajustar a página".'));
-  if(A.life==='years'){pct=0.1;minPar=1;} if(A.life==='generations'){ecc= ecc==='M'?'H':'X';pct=0.35;minPar=3;}
-  if(A.recover==='unsure') warns.push(T('El perfil más seguro ocupa unas 7 veces más hojas que el de escáner. Si tienes acceso a un escáner de 600 dpi, considera esa opción.'));
-  return {cell,ecc,pct,minPar,warns}; }
+  if(A.life==='years'){pct=0.1;minSheets=1;} if(A.life==='generations'){ecc= ecc==='M'?'H':'X';pct=0.35;minSheets=2;}
+  if(A.recover==='blocks') warns.push(T('Al recuperar, la pantalla te pedirá una foto de cerca de cada bloque (A, B, C, D), en cualquier orden. Imprime una hoja y pruébalo antes de guardar el resto.'));
+  return {panels,cell,ecc,pct,minSheets,warns}; }
+function parityUnits(dataUnits,panels,pct,minSheets){ const b=Math.max(1,panels); let u=Math.max(minSheets*b,Math.ceil(dataUnits*pct)); return Math.min(254,Math.ceil(u/b)*b); }
 let manual=false;
-['#cell','#ecc','#parity','#paper','#compress'].forEach(s=>$(s).addEventListener('change',()=>{manual=true;estimate();}));
-async function summary(){ if(!manual){ const dv=derive(); $('#cell').value=dv.cell; $('#ecc').value=dv.ecc; const est0=await (await fetch('/api/estimate?'+new URLSearchParams({size:A.file.size,paper:$('#paper').value,cell:dv.cell,ecc:dv.ecc,parity:0}))).json(); $('#parity').value=Math.max(dv.minPar,Math.ceil(est0.data_pages*dv.pct)); const w=$('#warn'); w.innerHTML=dv.warns.join('<br>'); w.classList.toggle('show',dv.warns.length>0); }
+['#panels','#cell','#ecc','#parity','#paper','#compress'].forEach(s=>$(s).addEventListener('change',()=>{manual=true;estimate();}));
+async function summary(){ if(!manual){ const dv=derive(); $('#panels').value=dv.panels; $('#cell').value=dv.cell; $('#ecc').value=dv.ecc; const est0=await (await fetch('/api/estimate?'+new URLSearchParams({size:A.file.size,paper:$('#paper').value,cell:dv.cell,ecc:dv.ecc,parity:0,panels:dv.panels}))).json(); $('#parity').value=parityUnits(est0.data_pages,dv.panels,dv.pct,dv.minSheets); const w=$('#warn'); w.innerHTML=dv.warns.join('<br>'); w.classList.toggle('show',dv.warns.length>0); }
   $('#cvName').textContent=A.file.name; $('#cvDesc').textContent=$('#desc').value; $('#cvDate').textContent=new Date().toLocaleDateString(I18N.lang==='en'?'en-GB':'es-ES'); estimate(); }
-async function estimate(){ const q={size:A.file.size,paper:$('#paper').value,cell:$('#cell').value,ecc:$('#ecc').value,parity:$('#parity').value};
-  const j=await (await fetch('/api/estimate?'+new URLSearchParams(q))).json();
-  $('#stat').innerHTML=`<div><b>${j.total_pages}</b>${T('hojas (máx.)')}</div><div><b>${(j.payload_per_page/1024).toFixed(0)}</b>${T('KB por hoja')}</div><div><b>${j.parity_pages}</b>${T('de paridad')}</div>`;
-  const names={phone:'móvil',scanner:'escáner 600 dpi',unsure:'cualquier cámara'}, pr={laser:'láser',inkjet:'inyección de tinta',shop:'copistería'}, lf={years:'unos años',decades:'décadas',generations:'generaciones'};
-  $('#chosen').innerHTML=T('Recuperación con {a} · impresión {b} · duración {c}',{a:'<b>'+T(names[A.recover])+'</b>',b:'<b>'+T(pr[A.print])+'</b>',c:'<b>'+T(lf[A.life])+'</b>'})+'<br>'+T('Celda {cell} px ({mm} mm) · corrección {ecc} · {parity} hoja(s) de paridad · {paper}',{cell:q.cell,mm:(q.cell*25.4/600).toFixed(2),ecc:q.ecc,parity:q.parity,paper:q.paper})+'<br><span class="muted">'+T('La compresión puede reducir el número de hojas.')+'</span>';
-  $('#cvMeta').textContent=T('{size} · {t} hojas ({d} de datos + {p} de paridad) · celda {mm} mm',{size:fmt(A.file.size),t:j.total_pages,d:j.data_pages,p:j.parity_pages,mm:(q.cell*25.4/600).toFixed(2)});
-  $('#cvIndex').innerHTML=Array.from({length:Math.min(j.total_pages,12)},(_,i)=>`${String(i+1).padStart(2,' ')} ${i<j.data_pages?T('datos ')+' ':T('paridad ')} ····</br>`).join('')+(j.total_pages>12?'…':''); animateCounters(); }
+async function estimate(){ const panels=+$('#panels').value; const q={size:A.file.size,paper:$('#paper').value,cell:$('#cell').value,ecc:$('#ecc').value,parity:$('#parity').value,panels};
+  $('#parityLabel').textContent=panels?T('Bloques de paridad'):T('Hojas de paridad');
+  const j=await (await fetch('/api/estimate?'+new URLSearchParams(q))).json(); if(j.detail){ toast(j.detail); return; }
+  const b=Math.max(1,panels), parSheets=Math.ceil(j.parity_pages/b), sheets=j.sheets||j.total_pages;
+  $('#stat').innerHTML=`<div><b>${sheets}</b>${T('hojas (máx.)')}</div><div><b>${(j.payload_per_sheet/1024).toFixed(0)}</b>${T('KB por hoja')}</div><div><b>${parSheets}</b>${T('de paridad')}</div>`;
+  const names={blocks:'móvil, bloque a bloque',phone1:'móvil, una foto por hoja',scanner:'escáner 600 dpi',unsure:'cualquier cámara'}, pr={laser:'láser',inkjet:'inyección de tinta',shop:'copistería'}, lf={years:'unos años',decades:'décadas',generations:'generaciones'};
+  const how=panels>1?T('{b} bloques por hoja (una foto por bloque)',{b:panels}):panels===1?T('una foto por hoja'):T('formato 1');
+  $('#chosen').innerHTML=T('Recuperación con {a} · impresión {b} · duración {c}',{a:'<b>'+T(names[A.recover]||'móvil')+'</b>',b:'<b>'+T(pr[A.print]||'láser')+'</b>',c:'<b>'+T(lf[A.life]||'décadas')+'</b>'})+'<br>'+T('Celda {cell} px ({mm} mm) · corrección {ecc} · {how} · {parity} de paridad · {paper}',{cell:q.cell,mm:(q.cell*25.4/600).toFixed(2),ecc:q.ecc,how,parity:panels?T('{n} bloque(s)',{n:j.parity_pages}):T('{n} hoja(s)',{n:j.parity_pages}),paper:q.paper})+'<br><span class="muted">'+T('La compresión puede reducir el número de hojas.')+'</span>';
+  $('#cvMeta').textContent=T('{size} · {t} hojas ({d} de datos + {p} de paridad) · celda {mm} mm',{size:fmt(A.file.size),t:sheets,d:sheets-parSheets,p:parSheets,mm:(q.cell*25.4/600).toFixed(2)});
+  const L='ABCD'; const lab=i=>b>1?`${Math.floor(i/b)+1}·${L[i%b]}`:String(i+1);
+  $('#cvIndex').innerHTML=Array.from({length:Math.min(j.total_pages,12)},(_,i)=>`${lab(i).padStart(4,' ')} ${i<j.data_pages?T('datos ')+' ':T('paridad ')} ····</br>`).join('')+(j.total_pages>12?'…':''); animateCounters(); }
 function animateCounters(){ $$('#stat b').forEach(b=>{ const v=+b.textContent; if(isNaN(v))return; let t0=null; const run=ts=>{ if(!t0)t0=ts; const p=Math.min(1,(ts-t0)/600); b.textContent=Math.round(v*(1-Math.pow(1-p,3))); if(p<1)requestAnimationFrame(run);}; requestAnimationFrame(run); }); }
 $('#desc').addEventListener('input',()=>{$('#cvDesc').textContent=$('#desc').value});
 // generar con progreso
-$('#btnGen').onclick=async()=>{ const fd=new FormData(); fd.append('file',A.file); fd.append('paper',$('#paper').value); fd.append('cell',$('#cell').value); fd.append('ecc',$('#ecc').value); fd.append('parity',$('#parity').value);
+$('#btnGen').onclick=async()=>{ const fd=new FormData(); fd.append('file',A.file); fd.append('paper',$('#paper').value); fd.append('cell',$('#cell').value); fd.append('ecc',$('#ecc').value); fd.append('parity',$('#parity').value); fd.append('panels',$('#panels').value);
   fd.append('compress',$('#compress').checked); fd.append('spec_page',$('#cover_on').checked); fd.append('cover',$('#cover_on').checked); fd.append('description',$('#desc').value); fd.append('lang',$('#pdflang').value);
   $('#genBtns').style.display='none'; $('#gen').classList.add('show'); $('#gstage').textContent=T('Subiendo el fichero…');
   if($('#local').checked && window.Worker){ await generateLocal(); return; }
@@ -206,7 +213,7 @@ $('#btnGen').onclick=async()=>{ const fd=new FormData(); fd.append('file',A.file
   const {job}=await r.json(); let pagesN=0;
   const tick=async()=>{ const j=await (await fetch('/api/jobs/'+job)).json();
     if(j.state==='error'){ $('#gstage').textContent=T('Error: {e}',{e:j.error}); return; }
-    $('#gpct').textContent=j.pct+'%'; $('#gbar').style.width=j.pct+'%'; $('#gstage').textContent=cap(j.stage)+(j.total>2?' '+T('· {done} de {total} hojas',{done:Math.min(j.done,j.total-2),total:j.total-2}):'');
+    $('#gpct').textContent=j.pct+'%'; $('#gbar').style.width=j.pct+'%'; $('#gstage').textContent=cap(j.stage)+(j.total>2&&!+$('#panels').value?' '+T('· {done} de {total} hojas',{done:Math.min(j.done,j.total-2),total:j.total-2}):'');
     const P=$('#gpages'); if(j.total>2 && P.children.length!==j.total-2){ P.innerHTML=''; for(let i=0;i<j.total-2;i++){P.appendChild(document.createElement('i'));} }
     [...P.children].forEach((e,i)=>e.classList.toggle('on',i<j.done));
     if(j.state==='done'){ finish(job,j.summary); return; } setTimeout(tick,500); };
@@ -215,12 +222,12 @@ const STAGES={engine:'Descargando el motor Python (≈20 MB, solo la primera vez
 async function generateLocal(){
   const w=getWorker(); const buf=await A.file.arrayBuffer();
   $('#gstage').textContent=T('Preparando el motor en tu navegador…'); $('#gbar').classList.add('indet'); $('#gbar').style.width='100%'; $('#gpct').textContent='…';
-  const opts={filename:A.file.name,paper:$('#paper').value,cell:$('#cell').value,ecc:$('#ecc').value,parity:$('#parity').value,compress:$('#compress').checked,spec:$('#cover_on').checked,cover:$('#cover_on').checked,description:$('#desc').value,lang:$('#pdflang').value,base_url:BASE};
+  const opts={filename:A.file.name,paper:$('#paper').value,cell:$('#cell').value,ecc:$('#ecc').value,parity:$('#parity').value,panels:+$('#panels').value,compress:$('#compress').checked,spec:$('#cover_on').checked,cover:$('#cover_on').checked,description:$('#desc').value,lang:$('#pdflang').value,base_url:BASE};
   await new Promise((resolve)=>{
     w.onmessage=ev=>{ const m=ev.data;
       if(m.type==='stage'){ $('#gstage').textContent=T(STAGES[m.key]||m.key); }
       else if(m.type==='progress'){ $('#gbar').classList.remove('indet'); const pct=Math.round(100*m.done/Math.max(1,m.total)); $('#gpct').textContent=pct+'%'; $('#gbar').style.width=pct+'%';
-        $('#gstage').textContent=cap(m.stage)+(m.total>2?' '+T('· {done} de {total} hojas',{done:Math.min(m.done,m.total-2),total:m.total-2}):'');
+        $('#gstage').textContent=cap(m.stage)+(m.total>2&&!+$('#panels').value?' '+T('· {done} de {total} hojas',{done:Math.min(m.done,m.total-2),total:m.total-2}):'');
         const P=$('#gpages'); if(m.total>2 && P.children.length!==m.total-2){ P.innerHTML=''; for(let i=0;i<m.total-2;i++){P.appendChild(document.createElement('i'));} } [...P.children].forEach((e,i)=>e.classList.toggle('on',i<m.done)); }
       else if(m.type==='done'){ const blob=new Blob([m.pdf],{type:'application/pdf'}); const s=m.summary; s._url=URL.createObjectURL(blob); s._name=A.file.name.replace(/\.[^.]+$/,'')+'.paperark.pdf'; s.pdf_bytes=blob.size; finish(null,s); resolve(); }
       else if(m.type==='error'){ $('#gstage').textContent=T('Error: {e}',{e:m.error}); $('#gbar').classList.remove('indet'); $('#genBtns').style.display=''; toast(T('No se ha podido generar en el navegador; prueba desmarcando la opción.')); resolve(); } };
@@ -229,7 +236,8 @@ async function generateLocal(){
 }
 function confetti(){ const c=document.createElement('div'); c.className='confetti'; document.body.appendChild(c); const cols=['#4f46e5','#0f766e','#15803d','#f59e0b','#ef4444','#a78bfa']; for(let i=0;i<90;i++){const e=document.createElement('i');e.style.left=Math.random()*100+'vw';e.style.background=cols[i%cols.length];e.style.animationDelay=(Math.random()*.9)+'s';e.style.transform=`rotate(${Math.random()*360}deg)`;c.appendChild(e);} setTimeout(()=>c.remove(),4000); }
 function cap(s){return s? s[0].toUpperCase()+s.slice(1):''}
-function finish(job,s){ $('#gen').classList.remove('show'); $('.preview').hidden=true; $('#done').classList.add('show'); confetti(); $('#doneSub').textContent=T('{name} · {t} hojas · {pdf} de PDF',{name:A.file.name,t:s.total_pages,pdf:fmt(s.pdf_bytes)});
-  $('#doneStat').innerHTML=`<div><b>${s.total_pages}</b>${T('hojas')}</div><div><b>${s.data_pages}</b>${T('de datos')}</div><div><b>${s.parity_pages}</b>${T('de paridad')}</div><div><b>${s.compressed?T('sí'):T('no')}</b>${T('comprimido')}</div>`;
+function finish(job,s){ $('#gen').classList.remove('show'); $('.preview').hidden=true; $('#done').classList.add('show'); confetti(); const sheets=s.sheets||s.total_pages, b=Math.max(1,s.panels||1);
+  $('#doneSub').textContent=T('{name} · {t} hojas · {pdf} de PDF',{name:A.file.name,t:sheets,pdf:fmt(s.pdf_bytes)});
+  $('#doneStat').innerHTML=`<div><b>${sheets}</b>${T('hojas')}</div><div><b>${b>1?b:'1'}</b>${T('fotos por hoja')}</div><div><b>${Math.ceil(s.parity_pages/b)}</b>${T('de paridad')}</div><div><b>${s.compressed?(s.compression||T('sí')):T('no')}</b>${T('comprimido')}</div>`;
   $('#doneSha').textContent='SHA-256 '+s.file_sha256; $('#btnDl').onclick=()=>{ const a=document.createElement('a'); if(s._url){a.href=s._url;a.download=s._name;} else {a.href='/api/jobs/'+job+'/file';a.download='';} a.click(); }; $('#btnDl').click(); }
 </script><script src="/static/fx.js" defer></script></body></html>

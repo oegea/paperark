@@ -11,6 +11,7 @@ async function boot() {
   py = await loadPyodide({ indexURL: PYODIDE });
   post('stage', { key: 'packages', pct: 25 });
   await py.loadPackage(['numpy', 'pillow', 'zstandard', 'micropip']);
+  try { await py.loadPackage(['lzma', 'brotli']); } catch (e) { /* compresores opcionales */ }
   post('stage', { key: 'deps', pct: 55 });
   const micropip = py.pyimport('micropip');
   await micropip.install(['reedsolo', 'qrcode']);
@@ -40,12 +41,15 @@ from paperark.encoder import encode_file
 import json
 o = opts.to_py() if hasattr(opts, 'to_py') else dict(opts)
 data = bytes(file_bytes)
+panels = int(o.get('panels', 0) or 0)
 r = encode_file(data, o['filename'], o.get('paper', 'A4'), int(o['cell']), o['ecc'], int(o['parity']),
-                'deflate' if o.get('compress', True) else False, bool(o.get('spec', True)), base_url=o.get('base_url'),
-                cover=bool(o.get('cover', True)), description=o.get('description', ''), progress=progress_cb, lang=o.get('lang', 'es'))
+                (True if panels else 'deflate') if o.get('compress', True) else False, bool(o.get('spec', True)), base_url=o.get('base_url'),
+                cover=bool(o.get('cover', True)), description=o.get('description', ''), progress=progress_cb, lang=o.get('lang', 'es'),
+                panels=panels)
 summary = json.dumps({"total_pages": r.total_pages, "data_pages": r.data_pages, "parity_pages": r.parity_pages,
                       "payload_per_page": r.payload_per_page, "file_sha256": r.file_sha256, "compressed": r.compressed,
-                      "stream_len": r.stream_len, "pdf_bytes": len(r.pdf), "qr_url": r.qr_url})
+                      "stream_len": r.stream_len, "pdf_bytes": len(r.pdf), "qr_url": r.qr_url,
+                      "sheets": r.sheets or r.total_pages, "panels": r.panels or 1, "compression": r.compression})
 pdf = r.pdf
 summary
 `);

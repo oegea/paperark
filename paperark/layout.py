@@ -40,7 +40,23 @@ HEADER_CELLS = 2 * 255 * 8     # 4080
 
 KIND_DATA, KIND_FINDER, KIND_ALIGN, KIND_HEADER, KIND_FILLER = 0, 1, 2, 3, 4
 
-CELL_SIZES = (3, 4, 5, 6, 8, 10)  # 8 y 10: perfiles para fotografía con móvil
+CELL_SIZES = (3, 4, 5, 6, 8, 10)  # formato 1; 8 y 10: perfiles para fotografía con móvil
+
+# --- formato 2: la hoja se divide en 1, 2 o 4 bloques independientes -------
+# Cada bloque tiene sus finders, marcadores y cabecera, y se fotografía por
+# separado (más cerca = más píxeles por celda). Bloques de 2: mitades superior
+# e inferior; de 4: cuadrícula 2x2 (A B / C D).
+V2_CELL_SIZES = (3, 4, 5, 6, 7, 8)
+PANEL_COUNTS = (1, 2, 4)
+PANEL_GRID = {1: (1, 1), 2: (1, 2), 4: (2, 2)}   # (columnas, filas)
+SHEET_MARGIN_MM = 6.0
+LABEL_MM = {1: 12.0, 2: 8.0, 4: 8.0}             # banda legible sobre cada bloque
+GUTTER_MM = 5.0                                  # separación entre bloques
+V2_HEADER_W = 60
+V2_HEADER_H = 40
+V2_HEADER_BYTES = 64
+V2_HEADER_CELLS = 255 * 8                        # RS(255,64) x1 = 2040
+PANEL_LETTERS = "ABCD"
 
 
 def mm_to_px(mm: float) -> int:
@@ -90,10 +106,15 @@ class Profile:
     paper: str
     cell: int
     align_spacing: int = 40
+    panels: int = 0          # 0 = formato 1 (hoja completa); 1, 2, 4 = formato 2
 
     @property
     def key(self) -> str:
-        return f"{self.paper}-{self.cell}"
+        return f"{self.paper}-{self.cell}" if not self.panels else f"{self.paper}-{self.cell}-p{self.panels}"
+
+    @property
+    def version(self) -> int:
+        return 2 if self.panels else 1
 
 
 class Layout:
@@ -103,10 +124,31 @@ class Layout:
         self.cell = profile.cell
         self.page_w = mm_to_px(w_mm)
         self.page_h = mm_to_px(h_mm)
-        self.x0 = mm_to_px(MARGIN_MM)
-        self.y0 = mm_to_px(TOP_MM + TEXT_BAND_MM)
-        avail_w = self.page_w - 2 * self.x0
-        avail_h = self.page_h - self.y0 - mm_to_px(MARGIN_MM)
+        self.panels = profile.panels
+        self.version = profile.version
+        if not self.panels:
+            self.x0 = mm_to_px(MARGIN_MM)
+            self.y0 = mm_to_px(TOP_MM + TEXT_BAND_MM)
+            avail_w = self.page_w - 2 * self.x0
+            avail_h = self.page_h - self.y0 - mm_to_px(MARGIN_MM)
+            self.panel_origins = [(self.x0, self.y0)]
+            self.label_rects = []
+            self.header_w, self.header_h, self.header_cells = HEADER_W, HEADER_H, HEADER_CELLS
+        else:
+            nc, nr = PANEL_GRID[self.panels]
+            m, lab, gut = mm_to_px(SHEET_MARGIN_MM), mm_to_px(LABEL_MM[self.panels]), mm_to_px(GUTTER_MM)
+            avail_w = (self.page_w - 2 * m - (nc - 1) * gut) // nc
+            avail_h = (self.page_h - 2 * m - nr * lab - (nr - 1) * gut) // nr
+            gw, gh = (avail_w // self.cell) * self.cell, (avail_h // self.cell) * self.cell
+            self.panel_origins, self.label_rects = [], []
+            for r in range(nr):
+                for c in range(nc):
+                    x = m + c * (avail_w + gut) + (avail_w - gw) // 2
+                    y = m + lab + r * (avail_h + lab + gut)
+                    self.panel_origins.append((x, y))
+                    self.label_rects.append((x, y - lab, gw, lab))
+            self.x0, self.y0 = self.panel_origins[0]
+            self.header_w, self.header_h, self.header_cells = V2_HEADER_W, V2_HEADER_H, V2_HEADER_CELLS
         self.cols = avail_w // self.cell
         self.rows = avail_h // self.cell
         self._build()
@@ -156,20 +198,21 @@ class Layout:
         self.markers = markers  # esquina superior-izquierda del bloque 7x7
         self.marker_variant = variants
         # zonas de cabecera
+        HW, HH, HC = self.header_w, self.header_h, self.header_cells
         self.header_zones = [
             (FINDER_RES, FINDER_RES),
-            (FINDER_RES, C - FINDER_RES - HEADER_W),
-            (R - FINDER_RES - HEADER_H, FINDER_RES),
-            (R - FINDER_RES - HEADER_H, C - FINDER_RES - HEADER_W),
+            (FINDER_RES, C - FINDER_RES - HW),
+            (R - FINDER_RES - HH, FINDER_RES),
+            (R - FINDER_RES - HH, C - FINDER_RES - HW),
         ]
         header_idx = []
         for (zy, zx) in self.header_zones:
-            sub = kind[zy:zy + HEADER_H, zx:zx + HEADER_W]
+            sub = kind[zy:zy + HH, zx:zx + HW]
             free = np.argwhere(sub == KIND_DATA)
             flat = (free[:, 0] + zy) * C + (free[:, 1] + zx)
             flat = np.sort(flat)
-            assert len(flat) >= HEADER_CELLS, "zona de cabecera demasiado pequeña"
-            use, rest = flat[:HEADER_CELLS], flat[HEADER_CELLS:]
+            assert len(flat) >= HC, "zona de cabecera demasiado pequeña"
+            use, rest = flat[:HC], flat[HC:]
             kind.flat[use] = KIND_HEADER
             kind.flat[rest] = KIND_FILLER
             header_idx.append(use)
@@ -187,6 +230,8 @@ class Layout:
 
     def describe(self) -> dict:
         return {
+            "version": self.version,
+            "panels": self.panels or 1,
             "paper": self.profile.paper,
             "cell_px": self.cell,
             "cell_mm": round(self.cell * 25.4 / DPI, 4),
@@ -199,10 +244,16 @@ class Layout:
         }
 
 
-@lru_cache(maxsize=32)
-def get_layout(paper: str, cell: int, align_spacing: int = 40) -> Layout:
-    return Layout(Profile(paper, cell, align_spacing))
+@lru_cache(maxsize=64)
+def get_layout(paper: str, cell: int, align_spacing: int = 40, panels: int = 0) -> Layout:
+    return Layout(Profile(paper, cell, align_spacing, panels))
+
+
+def layout_for(profile: Profile) -> Layout:
+    return get_layout(profile.paper, profile.cell, profile.align_spacing, profile.panels)
 
 
 def all_profiles() -> list[Profile]:
-    return [Profile(p, c) for p in PAPERS for c in CELL_SIZES]
+    v1 = [Profile(p, c) for p in PAPERS for c in CELL_SIZES]
+    v2 = [Profile(p, c, 40, n) for p in PAPERS for n in PANEL_COUNTS for c in V2_CELL_SIZES]
+    return v2 + v1

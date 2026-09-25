@@ -25,8 +25,10 @@ import numpy as np
 from PIL import Image
 
 from .codec import PageCodec, PageHeader
+from .codec2 import BlockCodec, HeaderV2, RATES, decode_header2
+from .eq import Equalizer
 from .i18n import msg
-from .layout import ALIGN_RES, FINDER, Layout, Profile, all_profiles, align_pattern, get_layout
+from .layout import ALIGN_RES, FINDER, Layout, Profile, all_profiles, align_pattern, get_layout, layout_for
 
 WARP_K = 4
 WARP_INTERP = cv2.INTER_LINEAR
@@ -41,6 +43,13 @@ class DecodeError(Exception):
     pass
 
 
+class _Partial(Exception):
+    """Lectura con palabras sin corregir: se guarda por si el ecualizador no mejora."""
+    def __init__(self, result):
+        super().__init__("parcial")
+        self.result = result
+
+
 @dataclass
 class PageDecodeResult:
     header: PageHeader
@@ -50,6 +59,11 @@ class PageDecodeResult:
     failed_codewords: list[int] = field(default_factory=list)
     profile: Profile | None = None
     orientation: int = 0
+    corners: list = field(default_factory=list)
+
+    @property
+    def panels(self) -> int:
+        return getattr(self.header, "panels", 0)
 
     @property
     def partial(self) -> bool:
@@ -158,52 +172,6 @@ def _order_clockwise(pts: np.ndarray) -> np.ndarray:
     return pts[np.argsort(ang)]
 
 
-def choose_finders(cands: list[tuple[float, float, float]]) -> list[tuple[np.ndarray, float]]:
-    """Construye hipótesis de los 4 vértices de la rejilla a partir de los
-    finders encontrados: 4 (directo), 3 (se completa el 4º) o 2 (rectángulo
-    deducido del perfil; varias hipótesis). Devuelve [(4 puntos en orden
-    horario, lado del finder en px), ...] de mejor a peor."""
-    if len(cands) < 2:
-        raise DecodeError(f"solo se han encontrado {len(cands)} finders (se necesitan al menos 2)")
-    sides = np.array([c[2] for c in cands])
-    med = np.median(sides)
-    cands = [c for c in cands if 0.7 * med <= c[2] <= 1.4 * med]
-    cands.sort(key=lambda c: -c[2])
-    cands = cands[:12]
-    pts_all = np.array([[c[0], c[1]] for c in cands], dtype=np.float64)
-    side = float(np.median([c[2] for c in cands]))
-    if len(cands) == 2:
-        return _two_finder_hypotheses(pts_all, side)
-    best, best_area = None, -1
-    if len(cands) >= 4:
-        for combo in itertools.combinations(range(len(cands)), 4):
-            p = _order_clockwise(pts_all[list(combo)])
-            area = cv2.contourArea(p.astype(np.float32))
-            # rechazar cuadriláteros muy irregulares
-            d = [np.linalg.norm(p[i] - p[(i + 1) % 4]) for i in range(4)]
-            if min(d) < 0.3 * max(d):
-                continue
-            if area > best_area:
-                best, best_area = p, area
-    if best is None:
-        # 3 finders: reconstruir el 4º (vértice opuesto al ángulo recto)
-        for combo in itertools.combinations(range(len(cands)), 3):
-            p = pts_all[list(combo)]
-            d = [np.linalg.norm(p[(i + 1) % 3] - p[(i + 2) % 3]) for i in range(3)]  # lado opuesto a i
-            b = int(np.argmax(d))  # vértice del ángulo recto = opuesto a la hipotenusa
-            a_, c_ = (b + 1) % 3, (b + 2) % 3
-            q = p[a_] + p[c_] - p[b]
-            p4 = _order_clockwise(np.vstack([p, q]))
-            area = cv2.contourArea(p4.astype(np.float32))
-            if area > best_area:
-                best, best_area = p4, area
-    if best is None:
-        if len(cands) >= 2:
-            return _two_finder_hypotheses(pts_all[:2], side)
-        raise DecodeError("no se ha podido formar un cuadrilátero con los finders")
-    return [(best, side)]
-
-
 def _two_finder_hypotheses(pts: np.ndarray, side: float) -> list[tuple[np.ndarray, float]]:
     """Con solo 2 finders: para cada perfil, decidir si son un lado corto, un
     lado largo o una diagonal, y construir el rectángulo (2 signos posibles)."""
@@ -241,33 +209,6 @@ def _two_finder_hypotheses(pts: np.ndarray, side: float) -> list[tuple[np.ndarra
         raise DecodeError("dos finders con separación no compatible con ningún perfil")
     hyps.sort(key=lambda t: t[2])
     return [(q, s) for q, s, _ in hyps]
-
-
-def identify_profile(pts: np.ndarray, side: float, all_matches: bool = False):
-    """pts en orden horario. Devuelve (perfil, índice de inicio s) tal que
-    pts[s], pts[s+1], pts[s+2], pts[s+3] = TL, TR, BR, BL (o su rotación 180º).
-    Con all_matches=True devuelve la lista [(perfil, s), ...] de todos los
-    perfiles compatibles, de mejor a peor (A4 y Letter con la misma celda se
-    parecen: la decisión final la toman los marcadores y la cabecera)."""
-    d = [np.linalg.norm(pts[i] - pts[(i + 1) % 4]) for i in range(4)]
-    s = 0 if (d[0] + d[2]) < (d[1] + d[3]) else 1  # lado corto primero (horizontal)
-    short = (d[s] + d[(s + 2) % 4]) / 2
-    long = (d[(s + 1) % 4] + d[(s + 3) % 4]) / 2
-    cell_px = side / FINDER
-    C_est = short / cell_px + FINDER
-    R_est = long / cell_px + FINDER
-    scored = []
-    for p in all_profiles():
-        L = get_layout(p.paper, p.cell)
-        err = abs(np.log(C_est / L.cols)) + abs(np.log(R_est / L.rows))
-        if err <= 0.16:
-            scored.append((err, p))
-    if not scored:
-        raise DecodeError(f"geometría no reconocida (cols~{C_est:.0f}, rows~{R_est:.0f})")
-    scored.sort(key=lambda t: t[0])
-    if all_matches:
-        return [(p, s) for _, p in scored]
-    return scored[0][1], s
 
 
 # ----------------------------------------------------------------------
@@ -484,54 +425,322 @@ def classify(values: np.ndarray, score: np.ndarray, layout: Layout):
 
 
 # ----------------------------------------------------------------------
-def decode_page(src, debug: dict | None = None, progress=None, lang: str = "es") -> PageDecodeResult:
-    """progress(etapa: str, fracción 0..1) se llama al avanzar (opcional)."""
+MAX_PROFILES = 8
+MAX_RECTIFY = 14
+LDPC_THRESHOLD = {1: 0.025, 2: 0.045, 3: 0.07, 4: 0.10}   # BER bruto aprox. que aguanta cada tasa
+
+
+def finder_quads(cands, shape, tier: int = 4) -> list[tuple[np.ndarray, np.ndarray, bool]]:
+    """Cuadriláteros candidatos (en orden horario) -> [(pts, lados de cada finder,
+    contiene_centro)]. tier = 4: los 4 finders presentes; 3: se completa el 4º
+    (esquina arrancada); 2: se deduce el rectángulo a partir de 2 (tira
+    arrancada). Con varios bloques en la imagen aparecen finders de los vecinos:
+    se descartan los cuadriláteros torcidos o que contienen otros finders."""
+    if len(cands) < 2:
+        raise DecodeError(f"solo se han encontrado {len(cands)} finders (se necesitan al menos 2)")
+    sides = np.array([c[2] for c in cands])
+    med = np.median(sides)
+    cands = [c for c in cands if 0.7 * med <= c[2] <= 1.4 * med]
+    cands.sort(key=lambda c: -c[2])
+    cands = cands[:16]
+    arr = np.array([[c[0], c[1], c[2]] for c in cands], dtype=np.float64)
+    center = (shape[1] / 2.0, shape[0] / 2.0)
+
+    def contains_other(poly, combo):
+        return any(cv2.pointPolygonTest(poly, (float(arr[j, 0]), float(arr[j, 1])), True) > 2 * arr[j, 2]
+                   for j in range(len(cands)) if j not in combo)
+
+    out = []
+    if tier == 4:
+        for combo in itertools.combinations(range(len(cands)), 4):
+            sub = arr[list(combo)]
+            c = sub[:, :2].mean(axis=0)
+            o = np.argsort(np.arctan2(sub[:, 1] - c[1], sub[:, 0] - c[0]))
+            p, sd = sub[o, :2], sub[o, 2]
+            d = [np.linalg.norm(p[i] - p[(i + 1) % 4]) for i in range(4)]
+            if min(d) < 0.3 * max(d) or not (0.7 < d[0] / d[2] < 1.43 and 0.7 < d[1] / d[3] < 1.43):
+                continue
+            poly = p.astype(np.float32).reshape(-1, 1, 2)
+            if not cv2.isContourConvex(poly):
+                continue
+            # casi un rectángulo en perspectiva: ángulos de 70-110º, lados opuestos casi
+            # paralelos y con el mismo número de celdas (cada lado medido con sus finders)
+            v = [p[(i + 1) % 4] - p[i] for i in range(4)]
+            cosang = [abs(np.dot(v[i], v[(i + 1) % 4])) / (d[i] * d[(i + 1) % 4]) for i in range(4)]
+            par = [abs(np.dot(v[i], -v[i + 2])) / (d[i] * d[i + 2]) for i in range(2)]
+            if max(cosang) > 0.4 or min(par) < 0.95:
+                continue
+            cp = sd / FINDER
+            nc = [d[i] / ((cp[i] + cp[(i + 1) % 4]) / 2) for i in range(4)]
+            if not (0.82 < nc[0] / nc[2] < 1.22 and 0.82 < nc[1] / nc[3] < 1.22):
+                continue
+            if contains_other(poly, combo):
+                continue
+            out.append((p, sd, cv2.pointPolygonTest(poly, center, False) >= 0))
+    elif tier == 3:
+        for combo in itertools.combinations(range(len(cands)), 3):
+            p = arr[list(combo), :2]
+            d = [np.linalg.norm(p[(i + 1) % 3] - p[(i + 2) % 3]) for i in range(3)]
+            b = int(np.argmax(d))                      # vértice del ángulo recto
+            a_, c_ = (b + 1) % 3, (b + 2) % 3
+            va, vc = p[a_] - p[b], p[c_] - p[b]
+            if abs(np.dot(va, vc)) / (np.linalg.norm(va) * np.linalg.norm(vc)) > 0.34:
+                continue
+            q = p[a_] + p[c_] - p[b]
+            p4 = _order_clockwise(np.vstack([p, q]))
+            poly = p4.astype(np.float32).reshape(-1, 1, 2)
+            if contains_other(poly, combo):
+                continue
+            sd = np.full(4, np.median(arr[list(combo), 2]))
+            out.append((p4, sd, cv2.pointPolygonTest(poly, center, False) >= 0))
+    else:
+        for i, j in itertools.combinations(range(len(cands)), 2):
+            try:
+                pair = _two_finder_hypotheses(arr[[i, j], :2], float(np.median(arr[[i, j], 2])))
+            except DecodeError:
+                continue
+            for q, sd in pair:
+                poly = q.astype(np.float32).reshape(-1, 1, 2)
+                if contains_other(poly, (i, j)):
+                    continue
+                out.append((q, np.full(4, sd), cv2.pointPolygonTest(poly, center, False) >= 0))
+    return out
+
+
+def match_profiles(pts: np.ndarray, sides: np.ndarray) -> list[tuple[float, Profile, int]]:
+    """[(error, perfil, s)] compatibles: pts[s..s+3] = TL, TR, BR, BL (o giro 180º).
+    Cada lado se mide en celdas con el tamaño de celda de SUS finders (la
+    perspectiva hace que los de un extremo se vean más pequeños). Se prueban las
+    dos asignaciones de lados (hoja vertical u horizontal)."""
+    cp = np.asarray(sides, dtype=np.float64) / FINDER
+    n = [np.linalg.norm(pts[i] - pts[(i + 1) % 4]) / ((cp[i] + cp[(i + 1) % 4]) / 2) for i in range(4)]
+    out = []
+    for s in (0, 1):
+        C_est = (n[s] + n[s + 2]) / 2 + FINDER
+        R_est = (n[s + 1] + n[(s + 3) % 4]) / 2 + FINDER
+        for p in all_profiles():
+            L = layout_for(p)
+            err = abs(np.log(C_est / L.cols)) + abs(np.log(R_est / L.rows))
+            if err <= 0.16:
+                out.append((float(err), p, s))
+    return out
+
+
+def hypotheses(gray: np.ndarray, cands, tier: int = 4) -> list[tuple[float, np.ndarray, float, Profile, int]]:
+    hy = []
+    ctr = np.array([gray.shape[1] / 2.0, gray.shape[0] / 2.0])
+    for pts, sides, inside in finder_quads(cands, gray.shape, tier):
+        side = float(np.median(sides))
+        # con finders ausentes (3 o 2) hay muchas reconstrucciones posibles: se
+        # prefieren las centradas en la foto (quien fotografía apunta al bloque)
+        off = 0.0
+        if tier < 4:
+            diag = float(np.linalg.norm(pts[2] - pts[0])) + 1e-6
+            off = 0.5 * float(np.linalg.norm(pts.mean(axis=0) - ctr)) / diag
+        for err, prof, s in match_profiles(pts, sides):
+            hy.append((err + off + (0.0 if inside else 0.25), pts, side, prof, s))
+    hy.sort(key=lambda t: t[0])
+    return hy
+
+
+def decode_page(src, debug: dict | None = None, progress=None, lang: str = "es", cands=None) -> PageDecodeResult:
+    """Decodifica UN bloque/hoja de la imagen. progress(etapa, fracción 0..1)."""
     def report(stage, frac):
         if progress:
             progress(stage, frac)
     report(msg(lang, "st_load"), 0.05)
     gray = load_gray(src)
     report(msg(lang, "st_finders"), 0.12)
-    cands = find_finders(gray)
-    hyps = []
-    last_err = None
-    done = False
-    for pts, side in choose_finders(cands)[:8]:
+    if cands is None:
+        cands = find_finders(gray)
+    if len(cands) < 2:
+        raise DecodeError(f"solo se han encontrado {len(cands)} finders (se necesitan al menos 2)")
+    last_err: Exception | None = None
+    partial = None
+    for tier in (4, 3, 2):
+        hy = hypotheses(gray, cands, tier)
+        if not hy:
+            continue
         try:
-            matches = identify_profile(pts, side, all_matches=True)
+            res = _decode_hypotheses(gray, cands, hy, debug, report, lang, budget=MAX_RECTIFY if tier == 4 else 2 * MAX_RECTIFY)
         except DecodeError as e:
             last_err = e
             continue
-        for profile, s in matches:
-            layout = get_layout(profile.paper, profile.cell)
-            ordered = np.roll(pts, -s, axis=0)
-            report(msg(lang, "st_align", paper=profile.paper, cell=profile.cell), 0.3)
-            warped, dx, dy, score, n_ok = iterative_rectify(gray, ordered, layout, side)
-            if n_ok < 8:
-                last_err = DecodeError(f"solo {n_ok} marcadores de alineación reconocidos")
-                continue
-            quality = (n_ok / len(layout.markers)) * float(np.nanmedian(score[score > 0]))
-            hyps.append((quality, profile, layout, ordered, warped, dx, dy, score, n_ok))
-            if n_ok >= 0.9 * len(layout.markers):
-                done = True  # los perfiles parecidos (A4/Letter) se evalúan todos; la cabecera decide
-        if done:
+        if not res.failed_codewords:
+            return res
+        if partial is None or len(res.failed_codewords) < len(partial.failed_codewords):
+            partial = res
+    if partial is not None:
+        return partial
+    raise DecodeError(f"no se ha podido leer la hoja ({last_err or 'geometría no reconocida'})")
+
+
+def _decode_hypotheses(gray, cands, hy, debug, report, lang, budget: int = 14) -> PageDecodeResult:
+    last_err: Exception | None = None
+    # 1) enderezar con varias hipótesis (hasta 3 cuadriláteros por perfil): es
+    #    barato y los marcadores dicen cuál encaja. En una foto de cerca de un
+    #    bloque aparecen finders de los vecinos y hay cuadriláteros "mezclados"
+    #    con medidas parecidas; los marcadores los descartan.
+    per_profile: dict[str, int] = {}
+    solved: set[str] = set()
+    ctxs = []
+    tried = 0
+    fast_partial = None
+    for err, pts, side, profile, s in hy:
+        k = profile.key
+        if k in solved or per_profile.get(k, 0) >= 3:
+            continue
+        if len(per_profile) >= MAX_PROFILES and k not in per_profile:
+            continue
+        if tried >= budget:
             break
-    if not hyps:
+        per_profile[k] = per_profile.get(k, 0) + 1
+        tried += 1
+        layout = layout_for(profile)
+        ordered = np.roll(pts, -s, axis=0)
+        report(msg(lang, "st_align", paper=profile.paper, cell=profile.cell), 0.2)
+        # criba rápida (3 iteraciones); el refinado completo, solo para las mejores
+        warped, dx, dy, score, n_ok = iterative_rectify(gray, ordered, layout, side, max_iter=3)
+        if n_ok < max(8, 0.25 * len(layout.markers)):
+            last_err = DecodeError(f"solo {n_ok} marcadores de alineación reconocidos")
+            continue
+        quality = (n_ok / len(layout.markers)) * float(np.nanmedian(score[score > 0]))
+        if n_ok >= 0.95 * len(layout.markers):
+            solved.add(k)
+            # vía rápida: casi todos los marcadores encajan -> decodificar ya (lo
+            # normal en una foto buena; en el navegador cada criba cuesta segundos).
+            # Formato 1: solo con el detector simple (un bloque v2 de 4 px se parece
+            # a una hoja v1 de 8 px y el ecualizador sería trabajo perdido).
+            report(msg(lang, "st_align", paper=profile.paper, cell=profile.cell), 0.3)
+            w2, dx2, dy2, sc2, n2 = iterative_rectify(gray, ordered, layout, side)
+            ctx = (profile, layout, w2, dx2, dy2, sc2, n2, ordered)
+            for use_eq in ((False, True) if layout.version == 2 else (False,)):
+                try:
+                    res = _decode_ctx(ctx, gray, cands, debug, report, lang, use_eq)
+                except _Partial as p:
+                    res = p.result
+                except (DecodeError, ValueError) as e:
+                    last_err = e
+                    continue
+                if not res.failed_codewords:
+                    return res
+                if fast_partial is None or len(res.failed_codewords) < len(fast_partial.failed_codewords):
+                    fast_partial = res
+                break
+        ctxs.append((quality, (profile, layout, ordered, side)))
+    if not ctxs:
         raise DecodeError(f"no se ha podido situar la rejilla ({last_err})")
-    hyps.sort(key=lambda h: -h[0])
-    # la cabecera es el árbitro final entre hipótesis (perfil y orientación)
-    for _, profile, layout, ordered, warped, dx, dy, score, n_ok in hyps:
-        report(msg(lang, "st_sample"), 0.55)
-        fx, fy = displacement_field(dx, dy, layout)
-        values = sample_cells(warped, fx, fy, layout)
-        bits, erasure, rel = classify(values, score, layout)
-        if debug is not None:
-            debug.update(dict(gray=gray, cands=cands, pts=ordered, warped=warped, dx=dx, dy=dy, score=score,
-                              values=values, bits=bits, erasure=erasure, rel=rel, layout=layout))
+    # perfiles con marcadores igual de buenos (p. ej. bloque v2 de 4 px y hoja v1 de
+    # 8 px tienen la misma retícula): primero el formato 2; la cabecera decide
+    ctxs.sort(key=lambda t: (-round(t[0] / 0.05), -t[1][0].version))
+    best_q = ctxs[0][0]
+    full = []
+    for q, (profile, layout, ordered, side) in ctxs:
+        if q < 0.3 * best_q or len(full) >= 4:
+            break
+        report(msg(lang, "st_align", paper=profile.paper, cell=profile.cell), 0.3)
+        warped, dx, dy, score, n_ok = iterative_rectify(gray, ordered, layout, side)
+        full.append((profile, layout, warped, dx, dy, score, n_ok, ordered))
+    ctxs = full
+    # 2) lectura rápida (detector simple) en todos; 3) con ecualizador
+    partial = fast_partial
+    for use_eq in (False, True):
+        for ctx in ctxs:
+            try:
+                res = _decode_ctx(ctx, gray, cands, debug, report, lang, use_eq)
+            except _Partial as p:
+                res = p.result
+            except (DecodeError, ValueError) as e:
+                last_err = e
+                continue
+            if not res.failed_codewords:
+                return res
+            if partial is None or len(res.failed_codewords) < len(partial.failed_codewords):
+                partial = res
+    if partial is not None:
+        return partial
+    raise DecodeError(f"no se ha podido leer la hoja ({last_err})")
+
+
+def decode_image(src, progress=None, lang: str = "es", max_blocks: int = 4) -> list[PageDecodeResult]:
+    """Todos los bloques legibles de una imagen (un escaneo de una hoja de 4
+    bloques los contiene todos; una foto de cerca, normalmente uno)."""
+    gray = load_gray(src)
+    cands = find_finders(gray)
+    out: list[PageDecodeResult] = []
+    if len(cands) < 2:
+        raise DecodeError(f"solo se han encontrado {len(cands)} finders (se necesitan al menos 2)")
+    while len(out) < max_blocks and len(cands) >= 2:
+        try:
+            r = decode_page(gray, progress=progress, lang=lang, cands=cands)
+        except DecodeError:
+            if not out:
+                raise
+            break
+        if any(o.header.page_index == r.header.page_index for o in out):
+            break
+        out.append(r)
+        if not r.panels or r.panels == 1:
+            break
+        # foto de cerca de un solo bloque (ocupa buena parte de la imagen): no
+        # buscar más; un escaneo de la hoja entera tiene los bloques pequeños
+        quad = np.array(r.corners, dtype=np.float32).reshape(-1, 1, 2)
+        if cv2.contourArea(quad) > 0.3 * gray.shape[0] * gray.shape[1]:
+            break
+        # quitar los finders usados y buscar otro bloque
+        used = r.corners
+        cands = [c for c in cands if min(np.hypot(c[0] - u[0], c[1] - u[1]) for u in used) > 2 * c[2]]
+        if len(cands) < 3:
+            break
+    return out
+
+
+def _rot(a):
+    return np.ascontiguousarray(np.rot90(a, 2))
+
+
+def _decode_ctx(ctx, gray, cands, debug, report, lang, use_eq: bool = True) -> PageDecodeResult:
+    profile, layout, warped, dx, dy, score, n_ok, ordered = ctx
+    report(msg(lang, "st_sample"), 0.4)
+    fx, fy = displacement_field(dx, dy, layout)
+    values = sample_cells(warped, fx, fy, layout)
+    bits, erasure, rel = classify(values, score, layout)
+    if debug is not None:
+        debug.update(dict(gray=gray, cands=cands, pts=ordered, warped=warped, dx=dx, dy=dy, score=score, fx=fx, fy=fy,
+                          values=values, bits=bits, erasure=erasure, rel=rel, layout=layout))
+    base_stats = {"markers_found": n_ok, "markers_total": len(layout.markers), "erased_cells": int(erasure.sum()),
+                  "profile": profile.key, "finders": len(cands), "cells": int(layout.rows * layout.cols)}
+    try:
+        if layout.version == 2:
+            res = _decode_v2(layout, profile, warped, fx, fy, bits, erasure, report, lang, debug, use_eq)
+        else:
+            res = _decode_v1(layout, profile, warped, fx, fy, bits, erasure, rel, report, lang, use_eq)
+    except _Partial as p:
+        p.result.stats.update(base_stats)
+        p.result.corners = [tuple(q) for q in ordered]
+        raise
+    res.stats.update(base_stats)
+    res.corners = [tuple(q) for q in ordered]
+    return res
+
+
+def _decode_v1(layout, profile, warped, fx, fy, bits, erasure, rel, report, lang, use_eq=True) -> PageDecodeResult:
+    """use_eq=False: solo el detector simple (y sin reintento); True: solo el ecualizador."""
+    last_err = None
+    eq_bits = None
+    for attempt in ((1,) if use_eq else (0,)):
+        if attempt == 1:
+            # respaldo: bits del ecualizador (celdas pequeñas o foto desenfocada)
+            eq = Equalizer(warped, fx, fy, layout.rows, layout.cols)
+            known = np.isin(layout.kind, [1, 2])
+            out = eq.run(known, layout.fixed, erasure)
+            eq_bits = (out > 0).astype(np.uint8)
+            conf = np.clip(np.abs(out) / (np.median(np.abs(out)) + 1e-6), 0, 1)
+            bits, rel = eq_bits, conf.astype(np.float32)
         for orient in (0, 1):
-            b = bits if orient == 0 else np.ascontiguousarray(np.rot90(bits, 2))
-            e = erasure if orient == 0 else np.ascontiguousarray(np.rot90(erasure, 2))
-            r = rel if orient == 0 else np.ascontiguousarray(np.rot90(rel, 2))
+            b = bits if orient == 0 else _rot(bits)
+            e = erasure if orient == 0 else _rot(erasure)
+            r = rel if orient == 0 else _rot(rel)
             try:
                 header, copy = PageCodec(layout, 179).decode_header(b, e)
             except ValueError as ex:
@@ -545,9 +754,102 @@ def decode_page(src, debug: dict | None = None, progress=None, lang: str = "es")
             payload, stats = codec.decode_payload(b, e, r)
             report(msg(lang, "st_verify"), 0.97)
             payload = payload[: header.payload_len]
-            stats.update({"markers_found": n_ok, "markers_total": len(layout.markers), "header_copy": copy,
-                          "erased_cells": int(erasure.sum()), "orientation": orient,
-                          "profile": profile.key, "finders": len(cands)})
+            stats.update({"header_copy": copy, "orientation": orient, "equalized": attempt == 1, "version": 1,
+                          "capacity": (255 - header.k) // 2})
             hash_ok = hashlib.sha256(payload).digest() == header.page_sha256 and not stats["failed"]
-            return PageDecodeResult(header, payload, stats, hash_ok, stats["failed_codewords"], profile, orient)
+            res = PageDecodeResult(header, payload, stats, hash_ok, stats["failed_codewords"], profile, orient)
+            if stats["failed"] and attempt == 0:
+                raise _Partial(res)  # reintentar con el ecualizador; si no mejora, vale esta
+            return res
     raise DecodeError(f"no se ha podido leer la cabecera ({last_err})")
+
+
+def _decode_v2(layout, profile, warped, fx, fy, bits, erasure, report, lang, debug=None, use_eq=True) -> PageDecodeResult:
+    from .layout import KIND_ALIGN, KIND_FINDER
+    R, C = layout.rows, layout.cols
+    # 1) cabecera: primero con el detector simple; si no, con el ecualizador
+    fixed_known = np.isin(layout.kind, [KIND_FINDER, KIND_ALIGN])
+    eq = None
+    out_u = None
+    header = None
+    orient = 0
+    copy = -1
+    last_err = None
+    for stage in ((1,) if use_eq else (0,)):
+        if stage == 1:
+            report(msg(lang, "st_eq"), 0.5)
+            eq = Equalizer(warped, fx, fy, R, C)
+            # para la cabecera (RS muy fuerte) basta una pasada; el ajuste fino llega después
+            out_u = eq.run(fixed_known, layout.fixed, erasure, dd_rounds=1, isi_rounds=0)
+            src_bits = (out_u > 0).astype(np.uint8)
+        else:
+            src_bits = bits
+        for o in (0, 1):
+            b = src_bits if o == 0 else _rot(src_bits)
+            e = erasure if o == 0 else _rot(erasure)
+            for j, idx in enumerate(layout.header_idx):
+                try:
+                    header = decode_header2(b.flat[idx], e.flat[idx])
+                    orient, copy = o, j
+                    break
+                except (ValueError, Exception) as ex:  # ReedSolomonError incluida
+                    last_err = ex
+            if header is not None:
+                break
+        if header is not None:
+            break
+    if header is None:
+        raise DecodeError(f"no se ha podido leer la cabecera ({last_err})")
+    if header.cell != layout.cell or header.panels != layout.panels:
+        raise DecodeError("la cabecera no coincide con la geometría detectada")
+    codec = BlockCodec(layout, header.k)
+    report(msg(lang, "st_header2", n=header.sheet + 1, total=-(-header.total_pages // header.panels),
+               p="ABCD"[header.panel]), 0.6)
+    rot = (lambda a: a) if orient == 0 else _rot
+    # 2) ecualizador con todas las celdas conocidas (en coordenadas sin girar)
+    if eq is None:
+        report(msg(lang, "st_eq"), 0.62)
+        eq = Equalizer(warped, fx, fy, R, C)
+    known_o, kbits_o = codec.known_cells(header)
+    known_u, kbits_u = rot(known_o), rot(kbits_o)
+    out_u = eq.run(known_u, kbits_u, erasure, start=out_u, dd_rounds=2 if out_u is None else 1, isi_rounds=2)
+    er_o = rot(erasure)
+    nb = codec.nb
+    ok = np.zeros(nb, bool)
+    cw_all = np.zeros((nb, codec.N), np.uint8)
+    iters_max = 0
+    for rnd in range(3):
+        report(msg(lang, "st_ldpc"), 0.75 + 0.07 * rnd)
+        llr_o = rot(eq.llr(out_u, known_u, kbits_u, erasure))
+        todo = np.flatnonzero(~ok)
+        blocks, cw, okb, iters = codec.decode_llr(llr_o, only=todo)
+        iters_max = max(iters_max, int(iters.max()) if len(iters) else 0)
+        cw_all[blocks[okb]] = cw[okb]
+        ok[blocks[okb]] = True
+        if ok.all() or rnd == 2 or not okb.any():
+            break
+        # vuelta del decodificador: los bits corregidos enseñan al ecualizador
+        cells, cbits = codec.cells_of_blocks(np.flatnonzero(ok), cw_all[ok])
+        k2 = known_o.copy(); b2 = kbits_o.copy()
+        k2.flat[cells] = True; b2.flat[cells] = cbits
+        known_u, kbits_u = rot(k2), rot(b2)
+        out_u = eq.run(known_u, kbits_u, erasure, start=out_u, dd_rounds=0, isi_rounds=2)
+    payload = bytearray(codec.payload_from(cw_all))
+    failed = [int(b) for b in np.flatnonzero(~ok)]
+    # tasa de error bruta estimada en las palabras corregidas
+    hard_o = rot((out_u > 0).astype(np.uint8))
+    stats = {"codewords": nb, "failed": len(failed), "failed_codewords": failed, "version": 2,
+             "rate": RATES[header.k], "ldpc_n": codec.N, "ldpc_k": codec.K, "iterations": iters_max,
+             "header_copy": copy, "orientation": orient, "equalized": True}
+    if ok.any():
+        cells, cbits = codec.cells_of_blocks(np.flatnonzero(ok), cw_all[ok])
+        errs = (hard_o.flat[cells] != cbits).reshape(int(ok.sum()), -1).mean(axis=1)
+        thr = LDPC_THRESHOLD[header.k]
+        stats.update({"symbol_error_rate": float(errs.mean()), "max_corrected": int(round(errs.max() * 1000)),
+                      "capacity": int(round(thr * 1000)), "corrected_symbols": int(round(errs.sum() * codec.N))})
+    if debug is not None:
+        debug.update(dict(eq_out=out_u, header=header, codec=codec))
+    payload = bytes(payload[: header.payload_len])
+    report(msg(lang, "st_verify"), 0.97)
+    hash_ok = hashlib.sha256(payload).digest()[:8] == header.page_sha256 and not failed
+    return PageDecodeResult(header, payload, stats, hash_ok, failed, profile, orient)

@@ -13,7 +13,7 @@ import os
 import sys
 
 from .codec import ECC_LEVELS
-from .layout import CELL_SIZES, PAPERS
+from .layout import CELL_SIZES, PAPERS, V2_CELL_SIZES
 
 
 def main(argv=None):
@@ -24,9 +24,12 @@ def main(argv=None):
     e.add_argument("file")
     e.add_argument("-o", "--output", required=True)
     e.add_argument("--paper", choices=list(PAPERS), default="A4")
-    e.add_argument("--cell", type=int, choices=CELL_SIZES, default=4, help="tamaño de celda en px @600dpi")
+    e.add_argument("--blocks", type=int, choices=[0, 1, 2, 4], default=4,
+                   help="bloques por hoja (formato 2; una foto de cerca por bloque). 0 = formato 1 (hoja completa, Reed-Solomon)")
+    e.add_argument("--cell", type=int, choices=sorted(set(CELL_SIZES) | set(V2_CELL_SIZES)), default=4, help="tamaño de celda en px @600dpi")
     e.add_argument("--ecc", choices=list(ECC_LEVELS), default="M")
-    e.add_argument("--parity", type=int, default=0, help="páginas de paridad por grupo (recupera cualquier N hojas perdidas)")
+    e.add_argument("--parity", type=int, default=0,
+                   help="páginas (formato 1) o bloques (formato 2) de paridad por grupo: recupera cualquier N perdidos")
     e.add_argument("--no-compress", action="store_true")
     e.add_argument("--no-spec", action="store_true", help="no incluir la hoja de especificación")
     e.add_argument("--no-cover", action="store_true", help="no incluir portada ni página de explicación")
@@ -43,7 +46,8 @@ def main(argv=None):
     s = sub.add_parser("estimate", help="estimar número de hojas")
     s.add_argument("size", type=int)
     s.add_argument("--paper", choices=list(PAPERS), default="A4")
-    s.add_argument("--cell", type=int, choices=CELL_SIZES, default=4)
+    s.add_argument("--blocks", type=int, choices=[0, 1, 2, 4], default=4)
+    s.add_argument("--cell", type=int, choices=sorted(set(CELL_SIZES) | set(V2_CELL_SIZES)), default=4)
     s.add_argument("--ecc", choices=list(ECC_LEVELS), default="M")
     s.add_argument("--parity", type=int, default=0)
 
@@ -57,10 +61,14 @@ def main(argv=None):
         data = open(args.file, "rb").read()
         r = encode_file(data, os.path.basename(args.file), args.paper, args.cell, args.ecc, args.parity,
                         not args.no_compress, not args.no_spec, base_url=args.url, cover=not args.no_cover,
-                        description=args.description, lang=args.lang)
+                        description=args.description, lang=args.lang, panels=args.blocks)
         open(args.output, "wb").write(r.pdf)
-        print(f"{args.output}: {r.total_pages} hojas ({r.data_pages} datos + {r.parity_pages} paridad), "
-              f"{r.payload_per_page} bytes/hoja, comprimido={r.compressed}, SHA-256 {r.file_sha256}")
+        if args.blocks:
+            print(f"{args.output}: {r.sheets} hojas, {r.total_pages} bloques ({r.data_pages} datos + {r.parity_pages} paridad), "
+                  f"{r.payload_per_page * args.blocks} bytes/hoja, compresión={r.compression or 'ninguna'}, SHA-256 {r.file_sha256}")
+        else:
+            print(f"{args.output}: {r.total_pages} hojas ({r.data_pages} datos + {r.parity_pages} paridad), "
+                  f"{r.payload_per_page} bytes/hoja, comprimido={r.compressed}, SHA-256 {r.file_sha256}")
     elif args.cmd == "decode":
         from .session import RestoreSession
         sess = RestoreSession(strict=args.strict)
@@ -77,11 +85,13 @@ def main(argv=None):
             open(out, "wb").write(data)
             print(f"OK: {out} ({len(data)} bytes, SHA-256 {info['sha256']}, hojas reconstruidas: {info['recovered_pages']})")
         else:
-            print("INCOMPLETO. Faltan hojas de datos:", [i + 1 for i in st.get("missing_data", [])])
+            print("INCOMPLETO. Faltan:", [sess.label(i) for i in st.get("missing_data", [])])
             sys.exit(2)
     elif args.cmd == "estimate":
-        from .encoder import estimate
-        print(json.dumps(estimate(args.size, args.paper, args.cell, args.ecc, args.parity), indent=1))
+        from .encoder import estimate, estimate2
+        est = estimate2(args.size, args.paper, args.cell, args.ecc, args.parity, args.blocks) if args.blocks \
+            else estimate(args.size, args.paper, args.cell, args.ecc, args.parity)
+        print(json.dumps(est, indent=1))
     elif args.cmd == "serve":
         import uvicorn
         from .web import lan_ip

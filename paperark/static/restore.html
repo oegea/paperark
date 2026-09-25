@@ -2,121 +2,191 @@
 <html lang="es"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>Recuperar · PaperArk</title><link rel="stylesheet" href="/static/app.css"><script src="/static/i18n.js"></script>
 <style>
-  .phases{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-bottom:16px}
-  .phase{background:var(--bg2);border:1px solid var(--line);border-radius:14px;padding:10px 12px;font-size:13px;color:var(--muted);display:flex;gap:8px;align-items:center;transition:.35s var(--ease)}
-  .phase b{display:grid;place-items:center;width:24px;height:24px;border-radius:50%;background:var(--line);color:var(--ink2);font-size:12px;flex:none;transition:.3s}
-  .phase.on{border-color:var(--acc);color:var(--ink);box-shadow:0 0 0 4px var(--acc-soft)}.phase.on b{background:var(--acc);color:#fff}
-  .phase.done{color:var(--ink)}.phase.done b{background:var(--ok);color:#fff}
-  @media (max-width:520px){.phase span{display:none}.phases{grid-template-columns:repeat(3,auto);justify-content:start}}
-  .file{display:grid;grid-template-columns:auto 1fr;gap:16px;align-items:center}
-  .ring{position:relative;width:96px;height:96px}.ring svg{transform:rotate(-90deg)}.ring circle{fill:none;stroke-width:8;stroke-linecap:round}
-  .ring .bg{stroke:var(--line)}.ring .fg{stroke:url(#g);stroke-dasharray:264;stroke-dashoffset:264;transition:stroke-dashoffset .9s var(--ease)}
-  .ring .pct{position:absolute;inset:0;display:grid;place-items:center;font-weight:800;font-size:20px;letter-spacing:-.5px}
-  .fname{font-size:clamp(20px,4.5vw,28px);font-weight:800;letter-spacing:-.5px;word-break:break-all;min-height:32px}
-  .desc{color:var(--ink2);font-size:14px;margin-top:2px}
-  .meta{display:flex;gap:8px;flex-wrap:wrap;margin-top:8px}
-  .sheets{display:grid;grid-template-columns:repeat(auto-fill,minmax(42px,1fr));gap:8px;margin-top:18px}
-  .sheet{aspect-ratio:1/1.25;border-radius:8px;background:var(--bg);border:1px solid var(--line);display:grid;place-items:center;font-size:12px;color:var(--muted);position:relative;transition:.35s var(--spring);font-weight:600}
+  /* --- barra fija: lo importante siempre a la vista (también en el móvil) --- */
+  .hud{position:sticky;top:0;z-index:30;margin:0 -16px 14px;padding:10px 16px 12px;background:rgba(246,245,241,.92);backdrop-filter:saturate(1.4) blur(12px);-webkit-backdrop-filter:saturate(1.4) blur(12px);border-bottom:1px solid var(--line)}
+  .hud-row{display:grid;grid-template-columns:auto 1fr auto;gap:12px;align-items:center}
+  .ring{position:relative;width:58px;height:58px}.ring svg{transform:rotate(-90deg)}.ring circle{fill:none;stroke-width:7;stroke-linecap:round}
+  .ring .bg{stroke:var(--line)}.ring .fg{stroke:url(#g);stroke-dasharray:163.4;stroke-dashoffset:163.4;transition:stroke-dashoffset .9s var(--ease)}
+  .ring .pct{position:absolute;inset:0;display:grid;place-items:center;font-weight:800;font-size:14px;letter-spacing:-.4px}
+  .ring.bump{animation:bump .5s var(--spring)}
+  @keyframes bump{40%{transform:scale(1.14)}}
+  .fname{font-size:clamp(16px,4.2vw,20px);font-weight:800;letter-spacing:-.3px;line-height:1.2;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .fsub{font-size:13px;color:var(--muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .fsub b{color:var(--ink)}
+  .chip{font-size:12px;font-weight:700;padding:6px 10px;border-radius:999px;background:var(--acc-soft);color:var(--acc);white-space:nowrap}
+  .chip.ok{background:var(--ok-soft);color:var(--ok)}
+  .live{display:none;margin-top:10px;font-size:13px}
+  .live.show{display:block;animation:rise .25s var(--ease)}
+  .live .st{display:flex;justify-content:space-between;gap:10px;margin-bottom:6px;color:var(--ink2)}
+  .live .st span:first-child{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .live .bar{height:6px}
+  .live .bar i{background:linear-gradient(90deg,var(--acc),var(--acc2));transition:width .35s var(--ease)}
+  .strip{display:flex;gap:2px;margin-top:10px;height:8px}
+  .strip i{flex:1;border-radius:3px;background:var(--line);transition:background .5s var(--ease)}
+  .strip i.ok{background:linear-gradient(90deg,var(--ok),#22c55e);animation:shine 1.2s var(--ease)}
+  .strip i.rec{background:var(--acc2)}.strip i.part{background:var(--warn)}
+  @keyframes shine{0%{filter:brightness(1.9);transform:scaleY(1.9)}100%{filter:none;transform:none}}
+
+  /* --- misión: qué foto toca --- */
+  .mission{text-align:center;padding:24px 20px 22px}
+  .mission .kicker{margin-bottom:6px}
+  .target{font-size:clamp(28px,8vw,40px);font-weight:800;letter-spacing:-1px;line-height:1.05;margin:4px 0 14px}
+  .target .tag{display:inline-block;padding:2px 14px;border-radius:14px;background:var(--ink);color:#fff;margin-left:4px}
+  .target.swap{animation:swap .5s var(--ease)}
+  @keyframes swap{0%{opacity:0;transform:translateY(14px) scale(.96)}100%{opacity:1;transform:none}}
+  .mini{display:flex;justify-content:center;margin:0 0 16px}
+  .mini .pg{width:112px;aspect-ratio:1/1.414;border:2.5px solid var(--ink);border-radius:8px;padding:7px;display:grid;gap:6px;background:#fff;box-shadow:var(--shadow)}
+  .mini .b{border-radius:4px;border:2px solid var(--line2);background:repeating-linear-gradient(45deg,#f1f0ec 0 4px,#fff 4px 8px);display:grid;place-items:center;font-weight:800;font-size:15px;color:var(--muted);transition:.3s}
+  .mini .b.ok{background:var(--ok-soft);border-color:var(--ok);color:var(--ok)}
+  .mini .b.tgt{border-color:var(--acc);color:#fff;background:var(--acc);animation:glow 1.4s infinite}
+  @keyframes glow{0%,100%{box-shadow:0 0 0 0 rgba(79,70,229,.55)}50%{box-shadow:0 0 0 9px rgba(79,70,229,0)}}
+  .tip{color:var(--ink2);font-size:14.5px;max-width:440px;margin:0 auto 16px}
+  .shoot{width:100%;max-width:440px;font-size:18px;padding:18px 20px}
+  .mission .alt{display:flex;gap:8px;justify-content:center;flex-wrap:wrap;margin-top:10px}
+  .mission .alt .btn{padding:10px 14px;font-size:14px}
+  .mission.shake{animation:shake .45s}
+  @keyframes shake{20%{transform:translateX(-8px)}40%{transform:translateX(7px)}60%{transform:translateX(-5px)}80%{transform:translateX(3px)}}
+  .oops{display:none;margin:12px auto 0;max-width:440px;padding:10px 12px;border-radius:12px;background:var(--warn-soft);color:var(--warn);font-size:14px;text-align:left}
+  .oops.show{display:block;animation:rise .3s var(--ease)}
+  .skip{background:none;border:0;color:var(--muted);font:inherit;font-size:13px;text-decoration:underline;margin-top:10px;cursor:pointer}
+
+  /* --- mapa de hojas y bloques --- */
+  .maphead{display:flex;justify-content:space-between;align-items:baseline;gap:10px;flex-wrap:wrap;margin-bottom:12px}
+  .legend{display:flex;gap:12px;flex-wrap:wrap;font-size:12px;color:var(--muted)}
+  .legend i{display:inline-block;width:10px;height:10px;border-radius:3px;margin-right:5px;vertical-align:-1px;border:1.5px solid var(--line2)}
+  .sheets{display:grid;grid-template-columns:repeat(auto-fill,minmax(74px,1fr));gap:12px}
+  .sheet{position:relative;aspect-ratio:1/1.414;border-radius:8px;background:#fff;border:1.5px solid var(--line2);padding:5px;display:grid;gap:4px;box-shadow:0 1px 2px rgba(0,0,0,.04)}
   .sheet.par{border-style:dashed}
-  .sheet.ok{background:var(--ok-soft);border-color:var(--ok);color:var(--ok);animation:flip .6s var(--ease)}
-  .sheet.rec{background:#e6f7f6;border-color:var(--acc2);color:var(--acc2)}
-  .sheet.part{background:var(--warn-soft);border-color:var(--warn);color:var(--warn)}
-  .sheet.busy{border-color:var(--acc);animation:pulse 1.1s infinite}
-  .sheet.ok::after{content:"✓";position:absolute;top:-6px;right:-6px;width:18px;height:18px;border-radius:50%;background:var(--ok);color:#fff;font-size:11px;display:grid;place-items:center;font-weight:900}
-  @keyframes flip{from{transform:rotateY(90deg)}to{transform:none}}
-  @keyframes pulse{0%,100%{box-shadow:0 0 0 0 rgba(79,70,229,.45)}50%{box-shadow:0 0 0 8px rgba(79,70,229,0)}}
-  .capture{margin-top:4px;display:grid;gap:10px}
-  .working{display:none;margin-top:12px;padding:12px 14px;border-radius:14px;background:var(--acc-soft);animation:rise .3s var(--ease)}
-  .working.show{display:block}
-  .working .st{display:flex;justify-content:space-between;font-size:14px;color:var(--ink);margin-bottom:8px;gap:10px}
-  .queue{margin-top:12px;display:flex;flex-direction:column;gap:6px}
-  .item{display:flex;align-items:center;gap:10px;padding:10px 12px;border-radius:12px;background:var(--bg);border:1px solid var(--line);font-size:14px;animation:slide .35s var(--ease)}
+  .sheet .n{position:absolute;top:-9px;left:6px;font-size:11px;font-weight:800;background:var(--bg);padding:0 5px;border-radius:6px;color:var(--ink2)}
+  .blk{position:relative;border-radius:4px;background:#f3f2ee;display:grid;place-items:center;font-size:12px;font-weight:800;color:#b3b1a8;transition:background .4s var(--ease),color .4s}
+  .blk.ok{background:var(--ok);color:#fff;animation:pop .55s var(--spring)}
+  .blk.rec{background:var(--acc2);color:#fff}
+  .blk.part{background:var(--warn);color:#fff}
+  .blk.tgt{outline:2.5px solid var(--acc);outline-offset:1px;color:var(--acc);animation:glow 1.4s infinite}
+  .blk.scan{overflow:hidden;color:var(--acc)}
+  .blk.scan::after{content:"";position:absolute;left:0;right:0;height:35%;background:linear-gradient(180deg,rgba(79,70,229,0),rgba(79,70,229,.45),rgba(79,70,229,0));animation:scan 1s linear infinite}
+  .blk.nope{background:var(--line)}
+  .blk.par:not(.ok):not(.rec):not(.part){background:#fff;border:1.5px dashed var(--line2)}
+  @keyframes scan{from{top:-35%}to{top:100%}}
+  @keyframes pop{0%{transform:scale(.6)}60%{transform:scale(1.18)}100%{transform:none}}
+  .float{position:fixed;z-index:60;pointer-events:none;font-weight:800;color:var(--ok);font-size:15px;animation:floatup 1.2s var(--ease) forwards;text-shadow:0 1px 0 #fff}
+  @keyframes floatup{0%{opacity:0;transform:translateY(6px) scale(.9)}20%{opacity:1}100%{opacity:0;transform:translateY(-44px) scale(1.1)}}
+
+  /* --- final --- */
+  .done{display:none;text-align:center;padding:24px 10px 6px}.done.show{display:block;animation:rise .6s var(--ease)}
+  .done .check{margin:0 auto 10px}
+  /* --- detalles --- */
+  details.more{margin-top:14px}
+  details.more summary{cursor:pointer;color:var(--ink2);font-weight:600;font-size:14px;padding:6px 0}
+  .queue{margin-top:8px;display:flex;flex-direction:column;gap:6px}
+  .item{display:flex;align-items:center;gap:10px;padding:9px 12px;border-radius:12px;background:var(--bg);border:1px solid var(--line);font-size:13.5px;animation:slide .35s var(--ease)}
   @keyframes slide{from{opacity:0;transform:translateX(-10px)}to{opacity:1;transform:none}}
-  .item .dot{width:10px;height:10px;border-radius:50%;background:var(--muted);flex:none}
-  .item.accepted .dot,.item.cover .dot{background:var(--ok)}.item.partial .dot{background:var(--warn)}.item.rejected .dot{background:var(--bad)}.item.busy .dot{background:var(--acc);animation:pulse 1s infinite}
+  .item .dot{width:9px;height:9px;border-radius:50%;background:var(--muted);flex:none}
+  .item.accepted .dot,.item.cover .dot{background:var(--ok)}.item.partial .dot{background:var(--warn)}.item.rejected .dot{background:var(--bad)}
   .item .src{color:var(--muted);font-size:12px;margin-left:auto;white-space:nowrap}
-  .done{display:none;text-align:center;padding:22px 10px 8px}.done.show{display:block;animation:rise .6s var(--ease)}
-  .phone{display:flex;gap:14px;align-items:center;margin-top:14px;flex-wrap:wrap;padding:12px;border:1px dashed var(--line2);border-radius:14px}
-  .hint{font-size:14px;color:var(--muted);flex:1;min-width:200px}
-  .missing{margin-top:10px;font-size:14px;color:var(--ink2)}.missing b{color:var(--warn)}
-  .status-line{margin-top:8px;min-height:22px;color:var(--muted);font-size:14px}
-  .health{margin-top:18px;padding:14px 16px;border:1px solid var(--line);border-radius:14px;background:var(--bg);animation:rise .5s var(--ease)}
-  .health .hh{display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:10px}
-  .hbars{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:8px 14px}
+  .hbars{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:8px 14px;margin-top:8px}
   .hb{font-size:12.5px;color:var(--ink2);display:grid;grid-template-columns:auto 1fr auto;gap:8px;align-items:center}
-  .hb .bar{height:8px}.hb .bar i{transition:width .8s var(--ease)}
-  .hb.ok .bar i{background:var(--ok)}.hb.mid .bar i{background:var(--warn)}.hb.bad .bar i{background:var(--bad)}.hb.rec .bar i{background:var(--acc2)}
+  .hb .bar{height:8px}.hb.ok .bar i{background:var(--ok)}.hb.mid .bar i{background:var(--warn)}.hb.bad .bar i{background:var(--bad)}.hb.rec .bar i{background:var(--acc2)}
+  .phone{display:flex;gap:14px;align-items:center;margin-top:12px;flex-wrap:wrap;padding:12px;border:1px dashed var(--line2);border-radius:14px}
+  .hint{font-size:14px;color:var(--muted);flex:1;min-width:200px}
   .check-banner{margin-bottom:14px;padding:12px 14px;border-radius:14px;background:var(--acc-soft);color:var(--acc);font-size:14px}
+  .sound{background:none;border:0;font-size:18px;cursor:pointer;padding:4px;line-height:1}
+  .drop{margin-top:12px}
+  @media (prefers-reduced-motion: reduce){ .blk.ok,.strip i.ok,.target.swap,.ring.bump{animation:none} }
 </style></head>
 <body><div class="wrap">
   <div class="top"><a class="brand" href="/"><span class="logo">P</span><span class="name">PaperArk</span></a><nav><a href="/create">Crear</a><a href="/restore" class="on">Recuperar</a><a href="/verify">Verificar</a><a href="/how"><span class="long">Cómo funciona</span><span class="short" hidden>Guía</span></a></nav></div>
-  <div class="phases"><div class="phase on" id="ph1"><b>1</b><span>Identificar el backup</span></div><div class="phase" id="ph2"><b>2</b><span>Capturar las hojas</span></div><div class="phase" id="ph3"><b>3</b><span>Descargar y verificar</span></div></div>
-
   <div class="check-banner" id="checkBanner" hidden><b>Modo comprobación:</b> fotografía o escanea las hojas impresas y verás el estado de cada una. No hace falta recuperar el fichero.</div>
-  <section class="card">
-    <div class="file">
-      <div class="ring"><svg width="96" height="96" viewBox="0 0 96 96"><defs><linearGradient id="g" x1="0" x2="1"><stop offset="0" stop-color="#4f46e5"/><stop offset="1" stop-color="#0ea5a3"/></linearGradient></defs><circle class="bg" cx="48" cy="48" r="42"/><circle class="fg" id="ringFg" cx="48" cy="48" r="42"/></svg><div class="pct" id="pct">0%</div></div>
-      <div>
-        <div class="fname skel" id="fname">Esperando la portada o la primera hoja…</div>
-        <div class="desc" id="desc"></div>
-        <div class="meta" id="meta"><span class="pill skel">— hojas</span><span class="pill skel">— KB</span></div>
-        <div class="status-line" id="statusLine">Escanea el QR de la portada, fotografía las hojas o arrástralas aquí. En cualquier orden.</div>
-      </div>
+
+  <div class="hud" id="hud">
+    <div class="hud-row">
+      <div class="ring" id="ring"><svg width="58" height="58" viewBox="0 0 58 58"><defs><linearGradient id="g" x1="0" x2="1"><stop offset="0" stop-color="#4f46e5"/><stop offset="1" stop-color="#0ea5a3"/></linearGradient></defs><circle class="bg" cx="29" cy="29" r="26"/><circle class="fg" id="ringFg" cx="29" cy="29" r="26"/></svg><div class="pct" id="pct">0%</div></div>
+      <div style="min-width:0"><div class="fname" id="fname">Reconstruyendo tu fichero</div><div class="fsub" id="fsub">Empieza por la portada o por cualquier bloque</div></div>
+      <div style="display:flex;align-items:center;gap:6px"><span class="chip" id="chip">0 fotos</span><button class="sound" id="sound" title="Sonido">🔊</button></div>
     </div>
-    <div class="sheets" id="sheets"></div>
-    <div class="missing" id="missing"></div>
-    <div class="health" id="health" hidden>
-      <div class="hh"><b>Salud del backup en papel</b><span id="healthVerdict" class="pill"></span></div>
-      <div class="hbars" id="hbars"></div>
-      <p class="note" id="healthNote">Cada barra es el margen de corrección que le queda a la hoja tras leerla: 100 % = sin errores; por debajo del 30 % conviene reimprimirla.</p>
+    <div class="live" id="live"><div class="st"><span id="lstage">Procesando…</span><span id="lpct" class="mono"></span></div><div class="bar"><i id="lbar"></i></div></div>
+    <div class="strip" id="strip"></div>
+  </div>
+
+  <section class="card mission" id="mission">
+    <div id="mBody">
+      <div class="kicker" id="mKicker">Empieza aquí</div>
+      <div class="target" id="mTarget">Fotografía la portada<br>o cualquier bloque</div>
+      <div class="mini" id="mMini" hidden></div>
+      <p class="tip" id="mTip">El QR de la portada identifica el backup. También puedes empezar directamente por las hojas, en cualquier orden.</p>
+      <button class="btn primary lg shoot" id="btnCam">📷 Hacer la foto</button>
+      <input type="file" id="cam" accept="image/*" capture="environment" hidden>
+      <div class="alt">
+        <button class="btn ghost" id="btnFiles">Subir fotos o escaneos</button>
+        <button class="btn ghost" id="btnQr">Leer el QR de la portada</button>
+      </div>
+      <input type="file" id="files" accept="image/*,.pdf,application/pdf" multiple hidden>
+      <input type="file" id="qrcam" accept="image/*" capture="environment" hidden>
+      <div class="oops" id="oops"></div>
+      <button class="skip" id="btnSkip" hidden>Este bloque está dañado: saltarlo</button>
     </div>
     <div class="done" id="done">
       <div class="check">✓</div>
-      <h2>Fichero reconstruido y verificado</h2>
+      <h2>Fichero reconstruido</h2>
       <p class="muted" id="doneSub"></p>
       <button class="btn ok lg" id="btnGet">Descargar el fichero</button>
       <p class="note mono" id="doneSha" style="word-break:break-all"></p>
     </div>
   </section>
 
+  <section class="card" id="mapCard" hidden>
+    <div class="maphead"><h2 style="margin:0">Tus hojas</h2>
+      <div class="legend"><span><i style="background:var(--ok);border-color:var(--ok)"></i>leído</span><span><i style="background:var(--warn);border-color:var(--warn)"></i>parcial</span><span><i style="background:var(--acc2);border-color:var(--acc2)"></i>reconstruido</span><span><i style="border-style:dashed"></i>paridad</span></div></div>
+    <div class="sheets" id="sheets"></div>
+    <p class="note" id="missing" style="margin-top:12px"></p>
+    <details class="more" id="healthBox" hidden><summary>Salud del papel · <span id="healthVerdict"></span></summary>
+      <div class="hbars" id="hbars"></div>
+      <p class="note">Cada barra es el margen de corrección que le queda al bloque tras leerlo: 100 % = sin errores; por debajo del 30 % conviene reimprimirlo.</p>
+    </details>
+    <details class="more"><summary>Historial</summary><div class="queue" id="queue"></div></details>
+  </section>
+
   <section class="card">
-    <div class="capture">
-      <button class="btn primary lg" id="btnCam">📷 Fotografiar una hoja</button>
-      <input type="file" id="cam" accept="image/*" capture="environment">
-      <button class="btn ghost" id="btnFiles">Subir escaneos o fotos (varios) · PNG, JPG, PDF</button>
-      <input type="file" id="files" accept="image/*,.pdf,application/pdf" multiple>
-      <button class="btn ghost" id="btnQr">Leer el QR de la portada con la cámara</button>
-      <input type="file" id="qrcam" accept="image/*" capture="environment">
-    </div>
-    <div class="drop" id="drop"><span class="big">🗂️</span>…o arrastra aquí las imágenes o el PDF del escáner</div>
-    <div class="working" id="working"><div class="st"><span id="wstage">Procesando…</span><span id="wpct" class="mono">0%</span></div><div class="bar"><i id="wbar"></i></div></div>
+    <div class="drop" id="drop" style="margin-top:0"><span class="big">🗂️</span>Arrastra aquí las imágenes o el PDF del escáner</div>
     <div class="phone" id="phone" hidden>
       <div class="qr"><img id="phoneQr" alt="QR"></div>
-      <div class="hint"><b style="color:var(--ink)">Continuar en el móvil</b><br>Escanea este código con la cámara del móvil: abre esta misma sesión para fotografiar las hojas. Lo que hagas allí aparece aquí al instante.</div>
+      <div class="hint"><b style="color:var(--ink)">Continuar en el móvil</b><br>Escanea este código con la cámara del móvil: abre esta misma sesión para fotografiar los bloques. Lo que hagas allí aparece aquí al instante.</div>
     </div>
-    <div class="toggle"><input type="checkbox" id="local"><label for="local" style="margin:0">Recuperar en tu navegador: las fotos no salen de tu dispositivo <span class="muted">(motor de ≈35 MB la primera vez)</span></label></div>
-    <div class="toggle"><input type="checkbox" id="strict"><label for="strict" style="margin:0">Modo estricto (exigir orden de escaneo)</label>
-      <button class="btn ghost" id="btnLost" style="margin-left:auto;padding:8px 12px;min-height:0" hidden>Marcar hoja esperada como perdida</button></div>
-    <div class="queue" id="queue"></div>
+    <details class="more"><summary>Opciones</summary>
+      <div class="toggle"><input type="checkbox" id="local"><label for="local" style="margin:0">Recuperar en tu navegador: las fotos no salen de tu dispositivo <span class="muted">(motor de ≈35 MB la primera vez)</span></label></div>
+      <div class="toggle"><input type="checkbox" id="strict"><label for="strict" style="margin:0">Modo estricto (exigir orden de escaneo)</label>
+        <button class="btn ghost" id="btnLost" style="margin-left:auto;padding:8px 12px;min-height:0" hidden>Marcar hoja esperada como perdida</button></div>
+    </details>
   </section>
   <footer><span class="credit">Vibe coded by <a href="https://www.linkedin.com/in/oriolegea/" target="_blank" rel="noopener">Oriol Egea</a> · <a href="/license">MIT license</a> · <a href="/how"><span class="long">Cómo funciona</span><span class="short" hidden>Guía</span></a> · <a href="https://github.com/oegea/paperark" target="_blank" rel="noopener">Código</a> · <span id="sidLabel" class="mono"></span></span></footer>
 </div>
 <div class="toast" id="toast"></div><div class="confetti" id="confetti"></div>
 <script>
 const $=s=>document.querySelector(s);
-let sid=null, st=null, busy=0, lastUpdated=0; const T=(s,v)=>I18N.t(s,v); const LQ='?lang='+I18N.lang;
-let LOCAL=false, worker=null, wq=Promise.resolve();
+let sid=null, st=null, busy=0, lastUpdated=0, photos=0; const T=(s,v)=>I18N.t(s,v); const LQ='?lang='+I18N.lang;
+let LOCAL=false, worker=null, wq=Promise.resolve(); const skipped=new Set(); let prevOk=new Set(), prevPct=0, milestone=0, target=null, primed=false;
+const LET='ABCD';
 const STAGES={engine:'Descargando el motor Python (≈35 MB, solo la primera vez)…',packages:'Cargando numpy y OpenCV…',deps:'Instalando dependencias…',sources:'Cargando el decodificador…',ready:'Motor listo'};
-function wsend(msg, transfer){ // cola de mensajes al worker: una operación cada vez
-  return wq = wq.then(()=>new Promise((resolve,reject)=>{ const w=getWorker(); w.onmessage=ev=>{ const m=ev.data;
-    if(m.type==='stage'){ showWork(T(STAGES[m.key]||m.key), m.pct); return; }
-    if(m.type==='progress'){ showWork(m.stage, m.pct); return; }
+
+// ---------- sonido y vibración (se activan con el primer toque) ----------
+let AC=null, SOUND=(()=>{try{return localStorage.getItem('paperark.sound')!=='0'}catch(e){return true}})();
+function ac(){ if(!AC){ try{ AC=new (window.AudioContext||window.webkitAudioContext)(); }catch(e){} } if(AC&&AC.state==='suspended') AC.resume(); return AC; }
+function tone(f,t0,dur,vol,type){ const a=ac(); if(!a||!SOUND) return; const o=a.createOscillator(), g=a.createGain(); o.type=type||'sine'; o.frequency.value=f; g.gain.setValueAtTime(0.0001,a.currentTime+t0); g.gain.exponentialRampToValueAtTime(vol||0.12,a.currentTime+t0+0.015); g.gain.exponentialRampToValueAtTime(0.0001,a.currentTime+t0+dur); o.connect(g).connect(a.destination); o.start(a.currentTime+t0); o.stop(a.currentTime+t0+dur+0.05); }
+function chime(){ tone(784,0,.18,.11); tone(1175,.07,.28,.09); buzz(25); }
+function fanfare(){ [523,659,784,1047].forEach((f,i)=>tone(f,i*.11,.35,.1,'triangle')); buzz([30,60,30,60,80]); }
+function thud(){ tone(196,0,.18,.08,'triangle'); buzz([60,40,60]); }
+function buzz(p){ try{ navigator.vibrate&&navigator.vibrate(p); }catch(e){} }
+function setSound(on){ SOUND=on; try{localStorage.setItem('paperark.sound',on?'1':'0')}catch(e){} $('#sound').textContent=on?'🔊':'🔇'; }
+$('#sound').onclick=()=>{ setSound(!SOUND); if(SOUND) chime(); }; setSound(SOUND);
+
+// ---------- motor local (Pyodide) ----------
+function wsend(msg, transfer){ return wq = wq.then(()=>new Promise((resolve,reject)=>{ const w=getWorker(); w.onmessage=ev=>{ const m=ev.data;
+    if(m.type==='stage'){ live(T(STAGES[m.key]||m.key), m.pct); return; }
+    if(m.type==='progress'){ live(m.stage, m.pct); return; }
     w.onmessage=null; if(m.type==='error') reject(new Error(m.error)); else resolve(m); };
-    w.postMessage(msg, transfer||[]); }));
-}
+    w.postMessage(msg, transfer||[]); })); }
 function getWorker(){ if(!worker){ worker=new Worker('/static/worker-restore.js'); worker.onerror=e=>toast('Worker: '+e.message); } return worker; }
-function showWork(stage,pct){ const w=$('#working'); w.classList.add('show'); $('#wstage').textContent=stage; $('#wpct').textContent=(pct==null?'':pct+'%'); $('#wbar').style.width=(pct==null?30:pct)+'%'; }
-async function rasterizePdf(file){ // PDF de escáner -> PNG por página (pdf.js) para el modo local
+async function rasterizePdf(file){
   const pdfjs=await import('https://cdnjs.cloudflare.com/ajax/libs/pdf.js/4.10.38/pdf.min.mjs');
   pdfjs.GlobalWorkerOptions.workerSrc='https://cdnjs.cloudflare.com/ajax/libs/pdf.js/4.10.38/pdf.worker.min.mjs';
   const doc=await pdfjs.getDocument({data:await file.arrayBuffer()}).promise; const out=[];
@@ -126,10 +196,19 @@ async function rasterizePdf(file){ // PDF de escáner -> PNG por página (pdf.js
     await page.render({canvasContext:c.getContext('2d',{willReadFrequently:true}),viewport:vp}).promise;
     const blob=await new Promise(r=>c.toBlob(r,'image/png')); out.push({name:`${file.name}#${i}`,data:await blob.arrayBuffer()}); c.width=c.height=0; }
   return out; }
+
+// ---------- utilidades ----------
 const params=new URLSearchParams(location.search);
-const hashMeta=(location.hash.match(/m=([^&]+)/)||[])[1]; const CHECK=params.get('check')==='1'; if(CHECK){ document.getElementById('checkBanner').hidden=false; document.getElementById('ph3').querySelector('span').textContent='Resultado'; }
-function fmt(n){return n==null?'—':n<1024?n+' B':n<1048576?(n/1024).toFixed(1)+' KB':(n/1048576).toFixed(2)+' MB'}
+const hashMeta=(location.hash.match(/m=([^&]+)/)||[])[1]; const CHECK=params.get('check')==='1'; if(CHECK){ $('#checkBanner').hidden=false; }
+function fmt(n){return n==null?'—':n<1024?Math.round(n)+' B':n<1048576?(n/1024).toFixed(n<10240?1:0)+' KB':(n/1048576).toFixed(2)+' MB'}
 function toast(t){const e=$('#toast');e.textContent=t;e.classList.add('show');clearTimeout(e._t);e._t=setTimeout(()=>e.classList.remove('show'),2600)}
+function live(stage,pct){ const w=$('#live'); w.classList.add('show'); $('#lstage').textContent=stage; $('#lpct').textContent=(pct==null?'':pct+'%'); $('#lbar').style.width=(pct==null?30:Math.max(3,pct))+'%'; }
+function liveOff(){ $('#live').classList.remove('show'); $('#lbar').style.width='0'; }
+const B=()=>st&&st.panels?st.panels:1;
+function label(i){ return st&&st.labels&&st.labels[i]?st.labels[i]:String(i+1); }
+function parts(i){ const b=B(); return {sheet:Math.floor(i/b), panel:i%b}; }
+
+// ---------- sesión ----------
 async function init(){
   const info0=await (await fetch('/api/info')).json().catch(()=>({}));
   if(!params.get('s') && window.Worker && (info0.serverless || localStorage.getItem('paperark.local')==='1')) $('#local').checked=true;
@@ -138,83 +217,143 @@ async function init(){
   if(LOCAL){ sid='local'; $('#sidLabel').textContent=T('sesión')+' '+T('local (en tu navegador)'); $('#phone').hidden=true;
     try{ const r=await wsend({type:'session',strict:$('#strict').checked,lang:I18N.lang}); st=r.status; if(hashMeta){ const m=await wsend({type:'meta',token:hashMeta}); st=m.status; toast(T('Portada leída desde el QR')); } }
     catch(e){ toast(T('No se ha podido iniciar el motor local; usando el servidor.')+' '+e.message); LOCAL=false; $('#local').checked=false; }
-    if(LOCAL){ $('#working').classList.remove('show'); render(st); return; } }
+    if(LOCAL){ liveOff(); render(st); return; } }
   if(params.get('s')){ sid=params.get('s'); try{ st=await (await fetch('/api/restore/'+sid+LQ)).json(); }catch(e){} }
   if(!st || st.detail){ const fd=new FormData(); fd.append('strict',$('#strict').checked); fd.append('lang',I18N.lang); if(hashMeta) fd.append('meta',hashMeta);
     const j=await (await fetch('/api/restore/session',{method:'POST',body:fd})).json(); sid=j.session; st=j.status; history.replaceState(null,'',`/restore?s=${sid}`); if(hashMeta) toast(T('Portada leída desde el QR')); }
   else if(hashMeta){ const fd=new FormData(); fd.append('meta',hashMeta); await fetch(`/api/restore/${sid}/meta`,{method:'POST',body:fd}); st=await (await fetch('/api/restore/'+sid+LQ)).json(); }
   $('#sidLabel').textContent=T('sesión')+' '+sid;
   const info=await (await fetch('/api/info')).json();
-  if(info.serverless){ const n=document.createElement('div'); n.className='note'; n.style.cssText='margin:0 0 12px;padding:10px 12px;border-radius:12px;background:var(--warn-soft);color:var(--warn)'; n.textContent=T('Este servidor no guarda estado entre peticiones: sube todas las hojas seguidas y sin cerrar la pestaña. Si la sesión se pierde, vuelve a subirlas.'); document.querySelector('.card').prepend(n); }
+  if(info.serverless){ const n=document.createElement('div'); n.className='note'; n.style.cssText='margin:0 0 12px;padding:10px 12px;border-radius:12px;background:var(--warn-soft);color:var(--warn)'; n.textContent=T('Este servidor no guarda estado entre peticiones: sube todas las hojas seguidas y sin cerrar la pestaña. Si la sesión se pierde, vuelve a subirlas.'); $('#mission').before(n); }
   if(!/Mobi|Android|iPhone|iPad/i.test(navigator.userAgent)){ $('#phone').hidden=false; $('#phoneQr').src='/api/qr?text='+encodeURIComponent(`${info.base_url}/restore?s=${sid}`); }
   render(st); poll();
 }
-async function poll(){ if(LOCAL) return; try{ const s=await (await fetch('/api/restore/'+sid+LQ)).json(); if(!s.detail && s.updated!==lastUpdated) render(s); }catch(e){} setTimeout(poll, busy||(st&&st.current)?700:2500); }
-function phases(s){ const p1=s.started, p2=s.started&&(s.accepted.length>0||s.partial.length>0), p3=s.complete;
-  $('#ph1').className='phase '+(p1?'done':'on'); $('#ph2').className='phase '+(p3?'done':p1?'on':''); $('#ph3').className='phase '+(p3?'on':''); }
+async function poll(){ if(LOCAL) return; try{ const s=await (await fetch('/api/restore/'+sid+LQ)).json(); if(!s.detail && s.updated!==lastUpdated) render(s); }catch(e){} setTimeout(poll, busy||(st&&st.current)?600:2500); }
+
+// ---------- qué foto toca ----------
+function nextTarget(s){
+  if(!s.started||s.complete) return null;
+  const read=new Set(s.accepted), part=new Set(s.partial);
+  for(let i=0;i<s.data_pages;i++) if(!read.has(i)&&!part.has(i)&&!skipped.has(i)) return i;
+  for(let i=s.data_pages;i<s.total_pages;i++) if(!read.has(i)&&!part.has(i)&&!skipped.has(i)) return i;   // paridad
+  for(let i=0;i<s.total_pages;i++) if(part.has(i)&&!skipped.has(i)) return i;                            // repetir parciales
+  return null; }
+function miniSheet(i){ const b=B(), {sheet,panel}=parts(i); const cols=b===4?2:1, rows=b===1?1:2;
+  let h=`<div class="pg" style="grid-template-columns:repeat(${cols},1fr);grid-template-rows:repeat(${rows},1fr)">`;
+  for(let p=0;p<b;p++){ const u=sheet*b+p; const cls=p===panel?'tgt':(st.accepted.includes(u)?'ok':''); h+=`<div class="b ${cls}">${b>1?LET[p]:sheet+1}</div>`; }
+  return h+'</div>'; }
+function renderMission(s){
+  const t=nextTarget(s); const changed=t!==target; target=t;
+  if(!s.started){ return; }
+  if(s.complete){ $('#mBody').hidden=true; return; }
+  $('#mBody').hidden=false;
+  if(t==null){ $('#mKicker').textContent=T('Casi está'); $('#mTarget').innerHTML=T('Faltan bloques'); $('#mMini').hidden=true; $('#mTip').textContent=T('Fotografía cualquiera de los bloques que faltan o de paridad.'); $('#btnCam').textContent='📷 '+T('Hacer la foto'); $('#btnSkip').hidden=true; return; }
+  const {sheet,panel}=parts(t), b=B(), par=t>=s.data_pages;
+  $('#mKicker').textContent=par?T('Siguiente · bloque de paridad'):T('Siguiente foto');
+  $('#mTarget').innerHTML=b>1? T('Hoja {n}',{n:sheet+1})+' · '+T('bloque')+' <span class="tag">'+LET[panel]+'</span>' : T('Hoja {n}',{n:sheet+1})+(s.sheets_total?` <span class="muted" style="font-size:.5em;font-weight:600">${T('de {t}',{t:s.sheets_total})}</span>`:'');
+  $('#mMini').innerHTML=miniSheet(t); $('#mMini').hidden=false;
+  $('#mTip').textContent=b>1? T('Acércate hasta que el bloque {p} llene la pantalla, con su etiqueta «{l}» visible. Luz uniforme, sin sombras ni reflejos.',{p:LET[panel],l:label(t)}) : T('La hoja entera en la foto, plana y bien iluminada, sin sombras ni reflejos.');
+  $('#btnCam').textContent='📷 '+T('Fotografiar {l}',{l:label(t)});
+  $('#btnSkip').hidden=!(s.parity_pages>0);
+  if(changed){ const e=$('#mTarget'); e.classList.remove('swap'); void e.offsetWidth; e.classList.add('swap'); }
+}
+
+// ---------- mapa de hojas ----------
+function buildMap(s){
+  const S=$('#sheets'); const b=B(); const nSheets=Math.ceil(s.total_pages/b);
+  if(S.dataset.key===`${s.total_pages}/${b}`) return; S.dataset.key=`${s.total_pages}/${b}`; S.innerHTML='';
+  const cols=b===4?2:1, rows=b===1?1:2;
+  for(let sh=0;sh<nSheets;sh++){ const d=document.createElement('div'); const allPar=sh*b>=s.data_pages; d.className='sheet'+(allPar?' par':''); d.style.gridTemplateColumns=`repeat(${cols},1fr)`; d.style.gridTemplateRows=`repeat(${rows},1fr)`;
+    d.innerHTML=`<span class="n">${sh+1}</span>`;
+    for(let p=0;p<b;p++){ const u=sh*b+p; const e=document.createElement('div'); e.className='blk'+(u>=s.total_pages?' nope':''); e.dataset.u=u; e.textContent=u>=s.total_pages?'':(b>1?LET[p]:(u>=s.data_pages?'P':'')); e.title=u<s.total_pages?label(u)+' · '+(u>=s.data_pages?T('paridad'):T('datos')):''; d.appendChild(e); }
+    S.appendChild(d); }
+  const strip=$('#strip'); strip.innerHTML=''; for(let i=0;i<s.data_pages;i++){ const e=document.createElement('i'); e.dataset.u=i; strip.appendChild(e); }
+}
+function blkEl(u){ return document.querySelector(`#sheets .blk[data-u="${u}"]`); }
+function floatAt(el,text){ if(!el) return; const r=el.getBoundingClientRect(); const f=document.createElement('div'); f.className='float'; f.textContent=text; f.style.left=(r.left+r.width/2-24)+'px'; f.style.top=(r.top-6)+'px'; document.body.appendChild(f); setTimeout(()=>f.remove(),1300); }
+
+// ---------- render ----------
 function render(s){
   st=s; lastUpdated=s.updated;
-  const w=$('#working'); if(s.current){ w.classList.add('show'); $('#wstage').textContent=(s.current.source?s.current.source+' · ':'')+s.current.stage; $('#wpct').textContent=s.current.pct+'%'; $('#wbar').style.width=s.current.pct+'%'; } else { w.classList.remove('show'); $('#wbar').style.width='0'; }
+  if(s.current){ live((s.current.source?s.current.source+' · ':'')+s.current.stage, s.current.pct); } else if(!busy) liveOff();
   if(!s.started) return;
-  phases(s);
-  $('#fname').classList.remove('skel'); $('#fname').textContent=s.filename||'—'; $('#desc').textContent=s.description||'';
-  const okData=s.accepted.filter(i=>i<s.data_pages).length, okPar=s.accepted.length-okData;
-  const pct=s.complete?100:Math.round(100*okData/s.data_pages);
-  $('#ringFg').style.strokeDashoffset=264-264*pct/100; $('#pct').textContent=pct+'%';
-  $('#meta').innerHTML=`<span class="pill">${T('{t} hojas · {d} datos + {p} paridad',{t:s.total_pages,d:s.data_pages,p:s.parity_pages})}</span><span class="pill">${fmt(s.file_size)}</span><span class="pill mono">${(s.file_sha256||'').slice(0,12)}…</span>${s.from_cover?'<span class="pill warn">'+T('según la portada')+'</span>':'<span class="pill ok">'+T('confirmado por las hojas')+'</span>'}`;
-  let line=T('Leídas {a} de {b} hojas de datos',{a:okData,b:s.data_pages}); if(s.parity_pages) line+=T(' y {a} de {b} de paridad',{a:okPar,b:s.parity_pages}); if(s.partial.length) line+=T(' · parciales: {list}',{list:s.partial.map(i=>i+1).join(', ')}); if(s.strict) line+=T(' · siguiente: hoja {n}',{n:s.expected+1});
-  $('#statusLine').textContent=line;
-  const S=$('#sheets'); if(S.children.length!==s.total_pages){ S.innerHTML=''; for(let i=0;i<s.total_pages;i++){const e=document.createElement('div');e.className='sheet'+(i>=s.data_pages?' par':'');e.textContent=i+1;e.title=i>=s.data_pages?T('paridad'):T('datos');S.appendChild(e);} }
-  [...S.children].forEach((e,i)=>{ const isPar=i>=s.data_pages; let cls='sheet'+(isPar?' par':''); if(s.accepted.includes(i)) cls+=' ok'; else if(s.partial.includes(i)) cls+=' part'; else if(s.complete&&!isPar) cls+=' rec'; if(e.classList.contains('busy')) cls+=' busy'; if(e.className!==cls) e.className=cls; });
-  const g=(s.recovery.groups||[]).filter(x=>x.needs_recovery&&!x.ok); const miss=s.missing_data.map(i=>i+1);
-  $('#missing').innerHTML = s.complete ? (miss.length||s.partial.length?'<b style="color:var(--acc2)">'+T('Faltan {n} hoja(s) de datos, pero la paridad permite reconstruirlas.',{n:miss.length})+'</b>':'')
-    : miss.length ? T('Faltan las hojas {list}',{list:'<b>'+miss.slice(0,30).join(', ')+(miss.length>30?'…':'')+'</b>'})+(s.parity_pages?T(' · con paridad bastan {n} hoja(s) más de datos o paridad',{n:g.reduce((a,x)=>a+x.still_needed,0)}):'') : '';
+  $('#mapCard').hidden=false; buildMap(s);
+  const okData=s.accepted.filter(i=>i<s.data_pages).length;
+  const pct=s.complete?100:Math.floor(100*okData/Math.max(1,s.data_pages));
+  $('#ringFg').style.strokeDashoffset=163.4-163.4*pct/100; $('#pct').textContent=pct+'%';
+  if(pct>prevPct){ const r=$('#ring'); r.classList.remove('bump'); void r.offsetWidth; r.classList.add('bump'); }
+  $('#fname').textContent=s.filename||T('Reconstruyendo tu fichero');
+  const total=s.file_size||s.stream_len; const perUnit=s.stream_len?s.stream_len/s.data_pages:(total?total/s.data_pages:0);
+  const got=s.complete?total:Math.min(total||0, okData*perUnit);
+  const left=s.missing_data.filter(i=>!skipped.has(i)).length;
+  $('#fsub').innerHTML=total? T('{a} de {b}',{a:'<b>'+fmt(got)+'</b>',b:fmt(total)})+' · '+(s.complete?T('listo'):T('faltan {n} foto(s)',{n:left})) : T('faltan {n} foto(s)',{n:left});
+  $('#chip').textContent=s.complete?T('¡Completo!'):(photos===1?T('1 foto'):T('{n} fotos',{n:photos})); $('#chip').className='chip'+(s.complete?' ok':'');
+  // bloques
+  const acc=new Set(s.accepted), part=new Set(s.partial), newly=[];
+  for(let u=0;u<s.total_pages;u++){ const e=blkEl(u); if(!e) continue; let cls='blk';
+    if(u>=s.data_pages) cls+=' par'; if(acc.has(u)) cls+=' ok'; else if(part.has(u)) cls+=' part'; else if(s.complete&&u<s.data_pages) cls+=' rec';
+    if(!s.complete&&u===nextTarget(s)&&!busy) cls+=' tgt'; if(e.classList.contains('scan')&&busy) cls+=' scan';
+    if(e.className!==cls){ e.className=cls; } if(acc.has(u)&&!prevOk.has(u)) newly.push(u); }
+  const strip=$('#strip'); [...strip.children].forEach((e,i)=>{ const c=acc.has(i)?'ok':part.has(i)?'part':(s.complete?'rec':''); if(e.className!==c) e.className=c; });
+  if(newly.length && primed){ newly.forEach((u,k)=>setTimeout(()=>floatAt(blkEl(u), u<s.data_pages?'+'+fmt(perUnit):T('+paridad')),k*160)); if(!s.complete) chime(); }
+  prevOk=acc; prevPct=pct; primed=true;
+  for(const m of [25,50,75]) if(pct>=m&&milestone<m&&!s.complete){ milestone=m; toast(m===50?T('¡Vas por la mitad! 🎉'):T('{m} % del fichero recuperado',{m})); }
+  // faltan
+  const miss=s.missing_data.map(label);
+  $('#missing').innerHTML = s.complete ? (miss.length||s.partial.length?'<b style="color:var(--acc2)">'+T('Faltaban {n} bloque(s), reconstruidos con la paridad.',{n:miss.length})+'</b>':'')
+    : miss.length ? T('Faltan: {list}',{list:'<b>'+miss.slice(0,40).join(', ')+(miss.length>40?'…':'')+'</b>'})+(s.parity_pages?' · '+T('con la paridad bastan {n} más',{n:(s.recovery.groups||[]).reduce((a,x)=>a+x.still_needed,0)}):'') : '';
   $('#btnLost').hidden=!(s.strict&&s.parity_pages>0&&!s.complete);
-  renderHealth(s);
-  if(s.complete&&!$('#done').classList.contains('show')){ $('#done').classList.add('show'); $('#doneSub').textContent=`${s.filename} · ${fmt(s.file_size)}${miss.length||s.partial.length?T(' · reconstruido con paridad'):''}`; $('#doneSha').textContent=T('SHA-256 esperado {h}',{h:s.file_sha256}); confetti(); }
+  renderHealth(s); renderMission(s);
+  if(s.complete&&!$('#done').classList.contains('show')){ $('#done').classList.add('show'); $('#doneSub').textContent=`${s.filename||''} · ${fmt(s.file_size||s.stream_len)}${miss.length||s.partial.length?T(' · reconstruido con paridad'):''}`; $('#doneSha').textContent=T('SHA-256 esperado {h}',{h:s.file_sha256}); fanfare(); confetti(); window.scrollTo({top:0,behavior:'smooth'}); }
 }
-function marginTxt(st,rep){ const x=st&&st.sheets&&rep.page_index!=null?st.sheets[rep.page_index]:null; return (x&&x.health!=null&&rep.status==='accepted')?' · '+T('margen {p} %',{p:x.health}):''; }
-function renderHealth(s){ const H=$('#health'); const sh=s.sheets||{}; const ids=Object.keys(sh).map(Number).sort((a,b)=>a-b); if(!ids.length){H.hidden=true;return;} H.hidden=false;
-  const B=$('#hbars'); B.innerHTML=''; let worst=100, weak=[];
-  for(const i of ids){ const x=sh[i]; const d=document.createElement('div'); let cls,pct,label;
-    if(x.recovered){cls='rec';pct=100;label=T('reconstruida');} else { pct=x.health; cls=pct>=60?'ok':pct>=30?'mid':'bad'; label=pct+' %'; worst=Math.min(worst,pct); if(pct<30) weak.push(i+1); }
-    d.className='hb '+cls; d.innerHTML=`<span>${T('Hoja')} ${i+1}</span><div class="bar"><i style="width:${pct}%"></i></div><span>${label}</span>`;
-    d.title=x.recovered?T('Reconstruida con paridad'):T('{c} de {cap} símbolos corregidos en el peor bloque · {e} % de celdas ilegibles · {m} % de marcadores',{c:x.max_corrected,cap:x.capacity,e:x.erased_pct,m:x.markers_pct}); B.appendChild(d); }
-  const v=$('#healthVerdict'); const okData=s.accepted.filter(i=>i<s.data_pages).length;
-  if(weak.length){ v.className='pill bad'; v.textContent=T('Reimprime las hojas {list}',{list:weak.join(', ')}); }
-  else if(worst<60){ v.className='pill warn'; v.textContent=T('Legible, con desgaste'); }
-  else { v.className='pill ok'; v.textContent=T('En buen estado'); }
-  if(s.complete && !weak.length) v.textContent+=' · '+T('el fichero se puede recuperar'); }
-function addItem(cls,text,src){const q=$('#queue');const e=document.createElement('div');e.className='item '+cls;e.innerHTML=`<span class="dot"></span><span></span><span class="src"></span>`;e.children[1].textContent=text;e.children[2].textContent=src||'';q.prepend(e);while(q.children.length>60)q.lastChild.remove();return e;}
-let busySheet=null; function mark(){ if(!st||!st.started)return; const S=$('#sheets'); const i=st.missing_data.find(i=>!st.partial.includes(i)); if(i!=null&&S.children[i]){busySheet=S.children[i];busySheet.classList.add('busy');} }
-function unmark(){ if(busySheet){busySheet.classList.remove('busy');busySheet=null;} }
+function renderHealth(s){ const H=$('#healthBox'); const sh=s.sheets||{}; const ids=Object.keys(sh).map(Number).sort((a,b)=>a-b); if(!ids.length){H.hidden=true;return;} H.hidden=false;
+  const Bx=$('#hbars'); Bx.innerHTML=''; let worst=100, weak=[];
+  for(const i of ids){ const x=sh[i]; const d=document.createElement('div'); let cls,pct,lab;
+    if(x.recovered){cls='rec';pct=100;lab=T('reconstruida');} else { pct=x.health; cls=pct>=60?'ok':pct>=30?'mid':'bad'; lab=pct+' %'; worst=Math.min(worst,pct); if(pct<30) weak.push(label(i)); }
+    d.className='hb '+cls; d.innerHTML=`<span>${label(i)}</span><div class="bar"><i style="width:${pct}%"></i></div><span>${lab}</span>`; Bx.appendChild(d); }
+  const v=$('#healthVerdict'); if(weak.length){ v.textContent=T('reimprime {list}',{list:weak.join(', ')}); v.style.color='var(--bad)'; } else if(worst<60){ v.textContent=T('legible, con desgaste'); v.style.color='var(--warn)'; } else { v.textContent=T('en buen estado'); v.style.color='var(--ok)'; } }
+function addItem(cls,text,src){const q=$('#queue');const e=document.createElement('div');e.className='item '+cls;e.innerHTML=`<span class="dot"></span><span></span><span class="src"></span>`;e.children[1].textContent=text;e.children[2].textContent=src||'';q.prepend(e);while(q.children.length>80)q.lastChild.remove();return e;}
+function oops(text){ const o=$('#oops'); o.innerHTML=text; o.classList.add('show'); const m=$('#mission'); m.classList.remove('shake'); void m.offsetWidth; m.classList.add('shake'); thud(); clearTimeout(o._t); o._t=setTimeout(()=>o.classList.remove('show'),9000); }
+
+// ---------- subir fotos ----------
+function handleReports(reps, fallbackName, asked){
+  let anyOk=false;
+  for(const rep of reps){ addItem(rep.status, rep.message, rep.source||fallbackName);
+    if(rep.status==='accepted'||rep.status==='cover'){ anyOk=true; if(rep.status==='cover') toast(rep.message);
+      else if(asked!=null && rep.page_index!=null && rep.page_index!==asked && B()>1) toast(T('¡Leído {l}! No era el que tocaba, pero vale igual.',{l:label(rep.page_index)})); }
+    else if(rep.status==='duplicate') toast(rep.message);
+    else if(rep.status==='partial'){ anyOk=true; toast(rep.message); }
+    else if(rep.status==='rejected') oops('<b>'+T('No se ha podido leer esta foto.')+'</b> '+T('Acércate más para que el bloque llene la pantalla, sujeta el móvil paralelo al papel, evita sombras y reflejos y espera a que enfoque.')+'<br><span class="muted" style="font-size:12px">'+rep.message+'</span>'); }
+  if(anyOk) $('#oops').classList.remove('show');
+}
 async function upload(files){
-  for(const f of files){ busy++; const it=addItem('busy',T('Leyendo {name}…',{name:f.name||T('foto')}),fmt(f.size)); mark();
-    $('#working').classList.add('show'); $('#wstage').textContent=(f.name||T('foto'))+' · '+T('subiendo'); $('#wpct').textContent='0%'; $('#wbar').style.width='3%';
+  for(const f of files){ busy++; photos++; const asked=target; const tgtEl=target!=null?blkEl(target):null; if(tgtEl){ tgtEl.classList.remove('tgt'); tgtEl.classList.add('scan'); }
+    live((f.name||T('foto'))+' · '+T('subiendo'),2);
     try{
       if(LOCAL){
         const items = (f.type==='application/pdf'||/\.pdf$/i.test(f.name)) ? await rasterizePdf(f) : [{name:f.name||'foto.jpg',data:await f.arrayBuffer()}];
-        it.remove();
-        for(const im of items){ const r=await wsend({type:'submit',name:im.name,data:im.data},[im.data]); for(const rep of r.reports){ addItem(rep.status, rep.message+marginTxt(r.status,rep), rep.source||im.name); if(rep.status==='accepted'||rep.status==='cover') toast(rep.message); } render(r.status); }
+        for(const im of items){ const r=await wsend({type:'submit',name:im.name,data:im.data},[im.data]); if(tgtEl) tgtEl.classList.remove('scan'); render(r.status); handleReports(r.reports, im.name, asked); }
       } else {
         const fd=new FormData(); fd.append('file',f,f.name||'foto.jpg');
         const r=await fetch(`/api/restore/${sid}/page`,{method:'POST',body:fd});
-        if(!r.ok){ let msg; try{ msg=(await r.clone().json()).detail; }catch(x){} if(!msg) msg=(await r.text()).slice(0,200)||('HTTP '+r.status); it.className='item rejected'; it.children[1].textContent=msg; }
-        else{ const j=await r.json(); it.remove(); for(const rep of j.reports){ addItem(rep.status, rep.message+marginTxt(j.status,rep), rep.source||f.name); if(rep.status==='accepted'||rep.status==='cover') toast(rep.message); } render(j.status); }
+        if(tgtEl) tgtEl.classList.remove('scan');
+        if(!r.ok){ let msg; try{ msg=(await r.clone().json()).detail; }catch(x){} if(!msg) msg=(await r.text()).slice(0,200)||('HTTP '+r.status); oops(msg); addItem('rejected',msg,f.name); }
+        else{ const j=await r.json(); render(j.status); handleReports(j.reports, f.name, asked); }
       }
-    }catch(e){ it.className='item rejected'; it.children[1].textContent=T('Error de red: {e}',{e:e.message||e}); }
-    busy--; unmark(); if(!busy){$('#working').classList.remove('show'); $('#wbar').style.width='0';} }
+    }catch(e){ if(tgtEl) tgtEl.classList.remove('scan'); oops(T('Error de red: {e}',{e:e.message||e})); }
+    busy--; if(!busy){ liveOff(); if(st) render(st); } }
 }
-$('#btnCam').onclick=()=>$('#cam').click(); $('#cam').onchange=e=>{upload([...e.target.files]);e.target.value='';};
-$('#btnFiles').onclick=()=>$('#files').click(); $('#files').onchange=e=>{upload([...e.target.files]);e.target.value='';};
-$('#btnQr').onclick=()=>$('#qrcam').click(); $('#qrcam').onchange=e=>{upload([...e.target.files]);e.target.value='';};
-const d=$('#drop'); d.onclick=()=>$('#files').click(); d.ondragover=e=>{e.preventDefault();d.classList.add('over')}; d.ondragleave=()=>d.classList.remove('over'); d.ondrop=e=>{e.preventDefault();d.classList.remove('over');upload([...e.dataTransfer.files]);};
+$('#btnCam').onclick=()=>{ ac(); $('#cam').click(); }; $('#cam').onchange=e=>{upload([...e.target.files]);e.target.value='';};
+$('#btnFiles').onclick=()=>{ ac(); $('#files').click(); }; $('#files').onchange=e=>{upload([...e.target.files]);e.target.value='';};
+$('#btnQr').onclick=()=>{ ac(); $('#qrcam').click(); }; $('#qrcam').onchange=e=>{upload([...e.target.files]);e.target.value='';};
+$('#btnSkip').onclick=()=>{ if(target!=null){ skipped.add(target); toast(T('Saltado {l}: se reconstruirá con la paridad si es posible.',{l:label(target)})); render(st); } };
+const d=$('#drop'); d.onclick=()=>$('#files').click(); d.ondragover=e=>{e.preventDefault();d.classList.add('over')}; d.ondragleave=()=>d.classList.remove('over'); d.ondrop=e=>{e.preventDefault();d.classList.remove('over');ac();upload([...e.dataTransfer.files]);};
 $('#btnLost').onclick=async()=>{ const j=LOCAL? await wsend({type:'lost'}) : await (await fetch(`/api/restore/${sid}/lost`,{method:'POST',body:new FormData()})).json(); addItem(j.report.status,j.report.message); render(j.status);};
 $('#strict').onchange=()=>{ location.href='/restore'+($('#strict').checked?'?strict=1':''); };
 $('#local').onchange=()=>{ localStorage.setItem('paperark.local',$('#local').checked?'1':'0'); location.href='/restore'+($('#strict').checked?'?strict=1':''); };
 if(params.get('strict')){ $('#strict').checked=true; }
-$('#btnGet').onclick=async()=>{ if(LOCAL){ try{ const r=await wsend({type:'finish'}); const b=new Blob([r.data]); const a=document.createElement('a'); a.href=URL.createObjectURL(b); a.download=r.name; a.click(); $('#ph3').className='phase done'; $('#doneSha').innerHTML=T('Descargado · SHA-256 verificado')+' <code>'+r.info.sha256+'</code>'; }catch(e){ toast(e.message); } return; }
-  const r=await fetch(`/api/restore/${sid}/file`); if(!r.ok){ let msg; try{ msg=(await r.clone().json()).detail; }catch(x){} toast(msg||await r.text()); return;} const b=await r.blob(); const a=document.createElement('a'); a.href=URL.createObjectURL(b); a.download=(r.headers.get('Content-Disposition')||'').match(/filename="(.+)"/)?.[1]||'restaurado.bin'; a.click(); $('#ph3').className='phase done'; $('#doneSha').innerHTML=T('Descargado · SHA-256 verificado')+' <code>'+r.headers.get('X-Sha256')+'</code> · <a href="/verify/'+r.headers.get('X-Sha256')+'">'+T('comprobar de nuevo')+'</a>'; };
-function confetti(){ const c=$('#confetti'); const cols=['#4f46e5','#0ea5a3','#16a34a','#f59e0b','#ef4444','#a78bfa']; for(let i=0;i<100;i++){const e=document.createElement('i');e.style.left=Math.random()*100+'vw';e.style.background=cols[i%cols.length];e.style.animationDelay=(Math.random()*.9)+'s';e.style.transform=`rotate(${Math.random()*360}deg)`;c.appendChild(e);setTimeout(()=>e.remove(),3600);} }
+$('#btnGet').onclick=async()=>{ if(LOCAL){ try{ const r=await wsend({type:'finish'}); const b=new Blob([r.data]); const a=document.createElement('a'); a.href=URL.createObjectURL(b); a.download=r.name; a.click(); $('#doneSha').innerHTML=T('Descargado · SHA-256 verificado')+' <code>'+r.info.sha256+'</code>'; }catch(e){ toast(e.message); } return; }
+  const r=await fetch(`/api/restore/${sid}/file`); if(!r.ok){ let msg; try{ msg=(await r.clone().json()).detail; }catch(x){} toast(msg||await r.text()); return;} const b=await r.blob(); const a=document.createElement('a'); a.href=URL.createObjectURL(b); a.download=(r.headers.get('Content-Disposition')||'').match(/filename="(.+)"/)?.[1]||'restaurado.bin'; a.click(); $('#doneSha').innerHTML=T('Descargado · SHA-256 verificado')+' <code>'+r.headers.get('X-Sha256')+'</code> · <a href="/verify/'+r.headers.get('X-Sha256')+'">'+T('comprobar de nuevo')+'</a>'; };
+function confetti(){ const c=$('#confetti'); const cols=['#4f46e5','#0ea5a3','#16a34a','#f59e0b','#ef4444','#a78bfa']; for(let i=0;i<110;i++){const e=document.createElement('i');e.style.left=Math.random()*100+'vw';e.style.background=cols[i%cols.length];e.style.animationDelay=(Math.random()*.9)+'s';e.style.transform=`rotate(${Math.random()*360}deg)`;c.appendChild(e);setTimeout(()=>e.remove(),3600);} }
 init();
 </script><script src="/static/fx.js" defer></script></body></html>

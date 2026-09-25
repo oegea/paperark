@@ -14,10 +14,10 @@ import time
 from dataclasses import dataclass, field
 
 import numpy as np
-import zstandard
 
 from .codec import FLAG_PARITY, FLAG_ZSTD, PageHeader
-from .decoder import DecodeError, PageDecodeResult, decode_page, load_gray, pdf_to_grays
+from .compress import decompress
+from .decoder import DecodeError, PageDecodeResult, decode_image, load_gray, pdf_to_grays
 from .encoder import plan_pages
 from .gf import rs_recover_columns
 from .meta import decode_meta
@@ -70,13 +70,43 @@ class RestoreSession:
 
     # ------------------------------------------------------------------
     @property
-    def P(self) -> int:
-        """Bytes de carga útil por página (la cabecera guarda cell y k; el papel
-        se deduce del primer escaneo)."""
-        assert self.meta is not None
+    def v2(self) -> bool:
+        return getattr(self.meta, "version", 1) == 2
+
+    @property
+    def panels(self) -> int:
+        return getattr(self.meta, "panels", 1) if self.meta is not None else int((self.cover or {}).get("b", 1))
+
+    def _codec(self):
         from .codec import PageCodec
+        from .codec2 import BlockCodec
         from .layout import get_layout
-        return PageCodec(get_layout(self._paper, self.meta.cell), self.meta.k).payload_len
+        m = self.meta
+        if self.v2:
+            return BlockCodec(get_layout(self._paper, m.cell, panels=m.panels), m.k)
+        return PageCodec(get_layout(self._paper, m.cell), m.k)
+
+    @property
+    def P(self) -> int:
+        """Bytes de carga útil por página/bloque (la cabecera guarda cell y k; el
+        papel se deduce del primer escaneo)."""
+        assert self.meta is not None
+        return self._codec().payload_len
+
+    @property
+    def chunk(self) -> int:
+        """Bytes por unidad de fallo (palabra RS en v1, palabra LDPC en v2)."""
+        return self._codec().chunk if self.v2 else self.meta.k
+
+    def label(self, i: int) -> str:
+        """Nombre legible de la unidad i: "3" (v1) o "3·A" (v2 con bloques)."""
+        b = self.panels
+        if not self.v2 or b <= 1:
+            return str(i + 1)
+        return f"{i // b + 1}·{'ABCD'[i % b]}"
+
+    def _sha_match(self, full_hex: str | None, h) -> bool:
+        return bool(full_hex) and full_hex.startswith(h.file_sha256.hex())
 
     def _groups(self):
         h = self.meta
@@ -95,9 +125,9 @@ class RestoreSession:
                 self._progress(source, self.t("st_pdf"), 0.02)
                 grays = pdf_to_grays(bytes(data))
                 for i, g in enumerate(grays):
-                    reports.append(self._submit_gray(g, f"{source or 'pdf'}#{i + 1}", (i, len(grays))))
+                    reports.extend(self._submit_gray(g, f"{source or 'pdf'}#{i + 1}", (i, len(grays))))
                 return reports
-            return [self._submit_gray(load_gray(src), source)]
+            return self._submit_gray(load_gray(src), source)
         finally:
             self.current = None
             self.updated = time.time()
@@ -110,18 +140,20 @@ class RestoreSession:
         self.current = {"source": source, "stage": stage, "pct": int(round(100 * frac))}
         self.updated = time.time()
 
-    def _submit_gray(self, gray: np.ndarray, source: str, part: tuple[int, int] | None = None) -> Report:
+    def _submit_gray(self, gray: np.ndarray, source: str, part: tuple[int, int] | None = None) -> list[Report]:
+        """Una imagen puede contener varios bloques (escaneo de una hoja de 4):
+        se aceptan todos y se devuelve un informe por bloque."""
         try:
-            res = decode_page(gray, progress=lambda st, fr: self._progress(source, st, fr, part), lang=self.lang)
+            results = decode_image(gray, progress=lambda st, fr: self._progress(source, st, fr, part), lang=self.lang)
         except DecodeError as e:
             self._progress(source, self.t("st_qr"), 0.9, part)
             meta = self.read_cover_qr(gray)
             if meta is not None:
-                return self.apply_meta(meta, source)
-            return self._log(Report("rejected", self.t("unreadable", err=e), source=source))
+                return [self.apply_meta(meta, source)]
+            return [self._log(Report("rejected", self.t("unreadable", err=e), source=source))]
         except Exception as e:  # pragma: no cover - defensivo
-            return self._log(Report("rejected", self.t("decode_error", err=e), source=source))
-        return self._log(self._accept(res, source))
+            return [self._log(Report("rejected", self.t("decode_error", err=e), source=source))]
+        return [self._log(self._accept(res, source)) for res in results]
 
     def t(self, key: str, **kw) -> str:
         return msg(self.lang, key, **kw)
@@ -134,7 +166,7 @@ class RestoreSession:
     # ------------------------------------------------------------------
     def apply_meta(self, meta: dict, source: str = "qr") -> Report:
         """Metadatos del QR de la portada (escaneado con el móvil o fotografiado)."""
-        if self.meta is not None and meta.get("h") != self.meta.file_sha256.hex():
+        if self.meta is not None and not self._sha_match(meta.get("h"), self.meta):
             return self._log(Report("rejected", self.t("cover_other", name=meta.get("n")), source=source))
         if self.cover is not None and self.cover.get("h") == meta.get("h"):
             return self._log(Report("duplicate", self.t("cover_dup"), source=source))
@@ -166,20 +198,21 @@ class RestoreSession:
         if self.meta is None:
             self._cells = 0
             try:
-                from .layout import get_layout
-                Lx = get_layout(res.profile.paper, h.cell); self._cells = Lx.rows * Lx.cols
+                from .layout import layout_for
+                Lx = layout_for(res.profile); self._cells = Lx.rows * Lx.cols
             except Exception:
                 pass
-            if self.cover is not None and self.cover.get("h") != h.file_sha256.hex():
+            if self.cover is not None and not self._sha_match(self.cover.get("h"), h):
                 return Report("rejected", self.t("not_cover_file", name=self.cover.get("n")),
                               h.page_index, h.total_pages, st, source)
             self.meta = h
             self._paper = res.profile.paper
         m = self.meta
         if h.file_sha256 != m.file_sha256:
-            return Report("rejected", self.t("other_file", name=h.filename, sha=h.file_sha256.hex()[:12]),
+            return Report("rejected", self.t("other_file", name=h.filename or "?", sha=h.file_sha256.hex()[:12]),
                           h.page_index, h.total_pages, st, source)
-        if h.total_pages != m.total_pages or h.k != m.k or h.cell != m.cell:
+        if (h.total_pages != m.total_pages or h.k != m.k or h.cell != m.cell
+                or getattr(h, "version", 1) != getattr(m, "version", 1) or getattr(h, "panels", 0) != getattr(m, "panels", 0)):
             return Report("rejected", self.t("inconsistent"),
                           h.page_index, h.total_pages, st, source)
         if h.page_index >= h.total_pages:
@@ -187,11 +220,11 @@ class RestoreSession:
         if self.strict:
             if h.page_index != self.expected:
                 if h.page_index in self.pages:
-                    return Report("duplicate", self.t("dup", n=h.page_index + 1), h.page_index, h.total_pages, st, source)
-                return Report("rejected", self.t("wrong_order", exp=self.expected + 1, n=h.page_index + 1),
+                    return Report("duplicate", self.t("dup", n=self.label(h.page_index)), h.page_index, h.total_pages, st, source)
+                return Report("rejected", self.t("wrong_order", exp=self.label(self.expected), n=self.label(h.page_index)),
                               h.page_index, h.total_pages, st, source)
         if h.page_index in self.pages and self.pages[h.page_index].good:
-            return Report("duplicate", self.t("dup_ignored", n=h.page_index + 1), h.page_index, h.total_pages, st, source)
+            return Report("duplicate", self.t("dup_ignored", n=self.label(h.page_index)), h.page_index, h.total_pages, st, source)
         rec = PageRecord(h, res.payload.ljust(self.P, b"\0"), list(res.failed_codewords), st, source)
         if res.partial:
             # reemplazar solo si es mejor que lo que teníamos
@@ -199,22 +232,23 @@ class RestoreSession:
             if prev is None or len(rec.failed_codewords) < len(prev.failed_codewords):
                 self.pages[h.page_index] = rec
             if self.strict:
-                text = self.t("partial_strict", n=h.page_index + 1, bad=len(res.failed_codewords), total=st["codewords"])
+                text = self.t("partial_strict", n=self.label(h.page_index), bad=len(res.failed_codewords), total=st["codewords"])
             else:
-                text = self.t("partial", n=h.page_index + 1, bad=len(res.failed_codewords), total=st["codewords"])
+                text = self.t("partial", n=self.label(h.page_index), bad=len(res.failed_codewords), total=st["codewords"])
             return Report("partial", text, h.page_index, h.total_pages, st, source)
         if not res.hash_ok:
-            return Report("rejected", self.t("hash_mismatch", n=h.page_index + 1),
+            return Report("rejected", self.t("hash_mismatch", n=self.label(h.page_index)),
                           h.page_index, h.total_pages, st, source)
         self.pages[h.page_index] = rec
         self.lost.discard(h.page_index)
         if self.strict:
             self.expected = h.page_index + 1
         kind = self.t("kind_parity") if h.flags & FLAG_PARITY else self.t("kind_data")
+        total_lbl = -(-h.total_pages // self.panels) if self.v2 else h.total_pages
         if st.get("corrected_symbols"):
-            text = self.t("accepted_corr", n=h.page_index + 1, total=h.total_pages, kind=kind, c=st["corrected_symbols"])
+            text = self.t("accepted_corr", n=self.label(h.page_index), total=total_lbl, kind=kind, c=st["corrected_symbols"])
         else:
-            text = self.t("accepted", n=h.page_index + 1, total=h.total_pages, kind=kind)
+            text = self.t("accepted", n=self.label(h.page_index), total=total_lbl, kind=kind)
         return Report("accepted", text, h.page_index, h.total_pages, st, source)
 
     # ------------------------------------------------------------------
@@ -238,6 +272,9 @@ class RestoreSession:
             if self.cover is not None:
                 c = self.cover
                 total, n_groups, groups = plan_pages(int(c["dp"]), int(c["pp"]))
+                b = int(c.get("b", 1))
+                base.update({"version": int(c.get("v", 1)), "panels": b, "sheets_total": -(-total // b),
+                             "labels": [str(i + 1) if b <= 1 else f"{i // b + 1}·{'ABCD'[i % b]}" for i in range(total)]})
                 base.update({"started": True, "complete": False, "from_cover": True, "filename": c["n"], "file_sha256": c["h"],
                              "description": c.get("d", ""),
                              "file_size": int(c["s"]), "data_pages": int(c["dp"]), "parity_pages": total - int(c["dp"]),
@@ -253,7 +290,7 @@ class RestoreSession:
         partial = sorted(i for i, p in self.pages.items() if not p.good)
         missing_data = [i for i in range(m.data_pages) if i not in good]
         rec = self._recoverability()
-        cap = (255 - m.k) // 2
+        cap = (255 - m.k) // 2 if not self.v2 else 45
         sheets = {}
         for i, p in self.pages.items():
             st = p.stats or {}
@@ -261,17 +298,20 @@ class RestoreSession:
                 sheets[i] = {"recovered": True}
                 continue
             mx = int(st.get("max_corrected", 0)); cw = int(st.get("codewords", 1)) or 1
+            cap_i = int(st.get("capacity", cap)) or cap
             erased = float(st.get("erased_cells", 0)) / max(1.0, float(st.get("cells", 0) or (self._cells or 1)))
             markers = float(st.get("markers_found", 0)) / max(1.0, float(st.get("markers_total", 1)))
             failed = int(st.get("failed", 0))
-            margin = 0.0 if failed else max(0.0, 1.0 - mx / cap)
+            margin = 0.0 if failed else max(0.0, 1.0 - mx / cap_i)
             health = round(100 * min(margin, markers, 1.0 - min(1.0, erased * 3)))
-            sheets[i] = {"health": health, "max_corrected": mx, "capacity": cap, "failed": failed, "codewords": cw,
+            sheets[i] = {"health": health, "max_corrected": mx, "capacity": cap_i, "failed": failed, "codewords": cw,
                          "erased_pct": round(100 * erased, 1), "markers_pct": round(100 * markers), "sym_err_pct": round(100 * float(st.get("symbol_error_rate", 0.0)), 2)}
         complete = all(i in good for i in range(m.data_pages)) or rec["recoverable"]
         base.update({
             "started": True, "complete": complete, "from_cover": False,
-            "filename": (self.cover or {}).get("n") or m.filename, "file_sha256": m.file_sha256.hex(), "stream_len": m.stream_len,
+            "filename": (self.cover or {}).get("n") or m.filename or self._manifest_name(), "file_sha256": ((self.cover or {}).get("h") or m.file_sha256.hex()), "stream_len": m.stream_len,
+            "version": getattr(m, "version", 1), "panels": self.panels, "sheets_total": -(-total // self.panels),
+            "labels": [self.label(i) for i in range(total)], "rate": getattr(m, "k", 0),
             "description": (self.cover or {}).get("d", ""),
             "file_size": (self.cover or {}).get("s"),
             "data_pages": m.data_pages, "parity_pages": total - m.data_pages, "total_pages": total,
@@ -281,6 +321,17 @@ class RestoreSession:
             "recovery": rec, "sheets": sheets,
         })
         return base
+
+    def _manifest_name(self) -> str:
+        """Nombre del fichero leído del manifiesto (va al principio del bloque 0)."""
+        p = self.pages.get(0)
+        if p is None or p.recovered:
+            return ""
+        try:
+            mlen = int.from_bytes(p.payload[:4], "little")
+            return json.loads(p.payload[4:4 + mlen].decode("utf-8")).get("name", "")
+        except (ValueError, UnicodeDecodeError):
+            return ""
 
     def _recoverability(self) -> dict:
         """Por grupo: qué falta y si la paridad disponible basta."""
@@ -324,7 +375,7 @@ class RestoreSession:
         total, n_groups, groups = self._groups()
         M = m.parity_pages
         P = self.P
-        k = m.k
+        k = self.chunk
         for g, (start, n) in enumerate(groups):
             data_idx = list(range(start, start + n))
             par_idx = list(range(m.data_pages + g * M, m.data_pages + (g + 1) * M))
@@ -375,14 +426,9 @@ class RestoreSession:
         stream = b"".join(self.pages[i].payload for i in range(m.data_pages))[: m.stream_len]
         mlen = int.from_bytes(stream[:4], "little")
         manifest = json.loads(stream[4:4 + mlen].decode("utf-8"))
-        body = stream[4 + mlen:]
-        if manifest.get("compression") == "zstd":
-            body = zstandard.ZstdDecompressor().decompress(body, max_output_size=max(1, manifest["size"]) * 2 + 1024)
-        elif manifest.get("compression") == "deflate":
-            import zlib
-            body = zlib.decompress(body)
+        body = decompress(manifest.get("compression", "none"), stream[4 + mlen:], manifest.get("size"))
         sha = hashlib.sha256(body).digest()
-        if sha != m.file_sha256:
+        if not sha.startswith(m.file_sha256) or (manifest.get("sha256") and manifest["sha256"] != sha.hex()):
             raise ValueError(self.t("file_hash_bad"))
         info = {"manifest": manifest, "sha256": sha.hex(), "size": len(body),
                 "recovered_pages": sorted(i for i, p in self.pages.items() if p.recovered)}

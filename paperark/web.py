@@ -17,7 +17,7 @@ from fastapi.staticfiles import StaticFiles
 from starlette.concurrency import run_in_threadpool
 
 from .codec import ECC_LEVELS
-from .encoder import encode_file, estimate
+from .encoder import encode_file, estimate, estimate2
 from .i18n import msg
 from .layout import CELL_SIZES, PAPERS, get_layout
 from .meta import decode_meta
@@ -83,7 +83,8 @@ def license_page():
     return page("license.html")
 
 
-PY_MODULES = ["__init__", "encoder", "codec", "gf", "layout", "render", "cover", "meta", "i18n", "spec_text", "decoder", "session"]
+PY_MODULES = ["__init__", "encoder", "codec", "codec2", "ldpc", "eq", "compress", "gf", "layout", "render", "cover", "meta",
+              "i18n", "spec_text", "decoder", "session"]
 
 
 @app.get("/api/pysrc")
@@ -140,9 +141,15 @@ def profiles():
 
 
 @app.get("/api/estimate")
-def api_estimate(size: int, paper: str = "A4", cell: int = 4, ecc: str = "M", parity: int = 0):
+def api_estimate(size: int, paper: str = "A4", cell: int = 4, ecc: str = "M", parity: int = 0, panels: int = 0):
+    """panels > 0: formato 2 (páginas = bloques; `sheets` = hojas físicas)."""
     try:
-        return estimate(size, paper, cell, ecc, parity)
+        if panels:
+            e = estimate2(size, paper, cell, ecc, parity, panels)
+            return {**e, "payload_per_page": e["payload_per_unit"], "data_pages": e["data_units"],
+                    "parity_pages": e["parity_units"], "total_pages": e["total_units"]}
+        e = estimate(size, paper, cell, ecc, parity)
+        return {**e, "sheets": e["total_pages"], "panels": 1, "payload_per_sheet": e["payload_per_page"]}
     except (KeyError, ValueError) as e:
         raise HTTPException(400, str(e))
 
@@ -150,13 +157,13 @@ def api_estimate(size: int, paper: str = "A4", cell: int = 4, ecc: str = "M", pa
 @app.post("/api/encode")
 async def api_encode(request: Request, file: UploadFile = File(...), paper: str = Form("A4"), cell: int = Form(4),
                      ecc: str = Form("M"), parity: int = Form(0), compress: bool = Form(True), spec_page: bool = Form(True),
-                     cover: bool = Form(True), description: str = Form(""), lang: str = Form("es")):
+                     cover: bool = Form(True), description: str = Form(""), lang: str = Form("es"), panels: int = Form(0)):
     data = await file.read()
     if not data:
         raise HTTPException(400, "fichero vacío")
     try:
         r = encode_file(data, file.filename or "fichero.bin", paper, cell, ecc, parity, compress, spec_page,
-                        base_url=base_url_for(request), cover=cover, description=description, lang=lang)
+                        base_url=base_url_for(request), cover=cover, description=description, lang=lang, panels=panels)
     except (KeyError, ValueError) as e:
         raise HTTPException(400, str(e))
     name = os.path.splitext(file.filename or "fichero")[0] + ".paperark.pdf"
@@ -177,7 +184,7 @@ JOBS: dict[str, dict] = {}
 @app.post("/api/jobs/encode")
 async def job_encode(request: Request, file: UploadFile = File(...), paper: str = Form("A4"), cell: int = Form(4),
                      ecc: str = Form("M"), parity: int = Form(0), compress: bool = Form(True), spec_page: bool = Form(True),
-                     cover: bool = Form(True), description: str = Form(""), lang: str = Form("es")):
+                     cover: bool = Form(True), description: str = Form(""), lang: str = Form("es"), panels: int = Form(0)):
     data = await file.read()
     if not data:
         raise HTTPException(400, "fichero vacío")
@@ -194,7 +201,7 @@ async def job_encode(request: Request, file: UploadFile = File(...), paper: str 
     def run():
         try:
             r = encode_file(data, fname, paper, cell, ecc, parity, compress, spec_page, base_url=base, cover=cover,
-                            description=description, progress=progress, lang=lang)
+                            description=description, progress=progress, lang=lang, panels=panels)
             job["result"] = r
             job.update({"state": "done", "pct": 100, "stage": msg(lang, "en_done")})
         except Exception as e:  # parámetros inválidos, etc.
@@ -216,7 +223,8 @@ def job_status(jid: str):
     if r is not None:
         out["summary"] = {"total_pages": r.total_pages, "data_pages": r.data_pages, "parity_pages": r.parity_pages,
                           "payload_per_page": r.payload_per_page, "file_sha256": r.file_sha256, "compressed": r.compressed,
-                          "stream_len": r.stream_len, "pdf_bytes": len(r.pdf), "qr_url": r.qr_url, "layout": r.layout_info}
+                          "stream_len": r.stream_len, "pdf_bytes": len(r.pdf), "qr_url": r.qr_url, "layout": r.layout_info,
+                          "sheets": r.sheets or r.total_pages, "panels": r.panels or 1, "compression": r.compression}
     return out
 
 

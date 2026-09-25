@@ -1,4 +1,32 @@
-# Resultados empíricos (simulación de impresión, envejecimiento, escaneo y daños)
+# Resultados empíricos
+
+## Formato 2: bloques + ecualizador + LDPC (fotos de móvil simuladas)
+
+Generado con `bench_v2.py`: una foto de 12 MP por bloque (o de la hoja entera en
+los perfiles de un bloque y en el formato 1), con el bloque llenando el encuadre,
+perspectiva, viñeteado, desenfoque, ruido y JPEG (`simulate_phone`). ✅ = bloque
+leído y verificado (en pequeño, % de bits erróneos antes de corregir); 🟠 = parcial;
+❌ = no leído. Corrección M. Cabecera: KB útiles por hoja A4.
+
+Tiempo medio por foto: 9.1 s (varios procesos en paralelo).
+| Escenario | v2 · 4 bloques · 0,17 mm<br>157 KB/hoja | v2 · 4 bloques · 0,13 mm<br>282 KB/hoja | v2 · 4 bloques · 0,21 mm<br>99 KB/hoja | v2 · 2 bloques · 0,21 mm<br>104 KB/hoja | v2 · 1 bloque · 0,30 mm<br>55 KB/hoja | v1 · hoja · 0,34 mm (antes)<br>35 KB/hoja |
+|---|---|---|---|---|---|---|
+| móvil nítido (desenfoque 1,1 px) | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
+| desenfoque 1,6 px | ✅ | ✅ <sub>0.00%</sub> | ✅ | ✅ | ✅ | ✅ |
+| desenfoque 2,2 px | ✅ <sub>0.00%</sub> | ✅ <sub>0.18%</sub> | ✅ | ✅ <sub>0.00%</sub> | ✅ <sub>0.01%</sub> | ✅ <sub>0.01%</sub> |
+| desenfoque 2,8 px | ✅ <sub>0.04%</sub> | ❌ | ✅ | ✅ <sub>0.12%</sub> | ✅ <sub>0.88%</sub> | ✅ <sub>0.53%</sub> |
+| 8 MP | ✅ | ✅ <sub>0.00%</sub> | ✅ | ✅ | ✅ | ✅ |
+| JPEG q70 + ruido | ✅ | ✅ <sub>0.00%</sub> | ✅ | ✅ | ✅ | ✅ |
+| inclinado 6º + perspectiva | ✅ | ✅ <sub>0.00%</sub> | ✅ | ✅ | ✅ | ✅ |
+| mancha de café | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ <sub>0.47%</sub> |
+| esquina arrancada | ✅ <sub>0.25%</sub> | ✅ <sub>0.27%</sub> | ✅ <sub>0.26%</sub> | ✅ <sub>0.13%</sub> | ✅ <sub>0.03%</sub> | ✅ |
+| doblez + rayas + polvo | ✅ <sub>0.37%</sub> | ✅ <sub>0.39%</sub> | ✅ <sub>0.38%</sub> | ✅ <sub>0.23%</sub> | ✅ <sub>0.10%</sub> | ✅ <sub>0.62%</sub> |
+| tóner desvaído 45 % | ✅ | ✅ <sub>0.00%</sub> | ✅ | ✅ | ✅ | ✅ |
+
+El perfil de 0,13 mm es el límite: no aguanta un desenfoque de 2,8 px. El formato 1
+(última columna) lee ahora más casos que antes porque el ecualizador actúa como respaldo.
+
+## Formato 1 (simulación de impresión, envejecimiento, escaneo y daños)
 
 Generado con `bench.py`: una hoja A4 con datos aleatorios por perfil, pasada por el simulador
 (`paperark/simulate.py`: ganancia de punto y difusión del tóner, papel amarillento con gradiente de

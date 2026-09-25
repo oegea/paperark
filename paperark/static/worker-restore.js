@@ -12,6 +12,7 @@ async function boot() {
   py = await loadPyodide({ indexURL: PYODIDE });
   post('stage', { key: 'packages', pct: 20 });
   await py.loadPackage(['numpy', 'pillow', 'zstandard', 'opencv-python', 'micropip']);
+  try { await py.loadPackage(['lzma', 'brotli']); } catch (e) { /* compresores opcionales */ }
   post('stage', { key: 'deps', pct: 60 });
   await py.pyimport('micropip').install(['reedsolo', 'qrcode']);
   post('stage', { key: 'sources', pct: 80 });

@@ -88,3 +88,83 @@ Por comparación: Optar 200 KB (celda 3 px, 50 % de paridad Golay); PaperBack ha
 ## 8. Resultados empíricos (simulación)
 
 Ver `bench.py` (impresión con ganancia de punto y difusión, papel amarillento con gradiente, ruido del sensor, giro, perspectiva, JPEG, daños físicos). Resultados en `BENCH.md`.
+
+
+## 9. Formato 2: bloques, ecualización y LDPC (septiembre 2026)
+
+Investigación completa en esta sección; código en `layout.py` (geometría de bloques),
+`codec2.py` (cabecera y datos), `ldpc.py`, `eq.py`, `compress.py` y `decoder.py`.
+
+### 9.1 Dónde está el límite
+
+* **No en la compresión.** Tras un buen compresor los bytes son casi aleatorios; por
+  el teorema de separación fuente-canal, a estas longitudes no hay nada "visual" que
+  ganar en el lado de la compresión: todo está en el canal (cuántos bits por mm²
+  sobreviven a imprimir y fotografiar) y en el código de canal.
+* **Medido en el simulador de móvil (12 MP, hoja entera):** con el detector del
+  formato 1 (centro de la celda + umbral local) el BER bruto pasa del 0 % con celda
+  de 0,34 mm al 3 % con 0,25 mm y al 12-25 % con 0,21 mm o menos. La información
+  mutua por celda con salida blanda, en cambio, se mantiene alta: el problema era el
+  detector, no el papel ni la cámara.
+* **Ecualizador 2D** (`eq.py`): regresión lineal por zonas de 64×64 celdas sobre 4
+  submuestras de la celda, las 24 vecinas y (segunda etapa) las decisiones blandas
+  de las vecinas (cancelación de interferencia). Se entrena con las celdas conocidas
+  (finders, marcadores, relleno, cabecera) y sus propias decisiones, y tras cada
+  vuelta del LDPC con los bits ya corregidos. Resultado (celda 0,25 mm, desenfoque
+  de 2,2 px): BER del 22 % al 0,65 %. Sin pilotos: rinde igual que un ecualizador
+  entrenado con un 5 % de celdas de datos conocidas.
+* **Soft decoding.** Sobre las mismas salidas, LDPC min-sum decodifica a tasa 0,85
+  donde Reed-Solomon con decisión dura necesita tasa 0,58 (desenfoque de 3,2 px con
+  celda de 0,34 mm).
+* **La cámara fija los bits por foto, no por hoja.** Unos 70-95 KB por foto de 12 MP
+  con este lector. Fotografiar bloques de cerca (4 por hoja) multiplica lo que cabe
+  en el papel; no reduce el número de fotos por MB. Opción elegida por el usuario:
+  4 bloques con guía paso a paso ("Hoja 3 · bloque B").
+* **Descartado:** grises o color (el tóner y el amarilleo los destruyen), símbolos
+  con forma (cimbar: por píxel de cámara rinden como celdas binarias de 0,25 mm),
+  códigos con restricciones 2D (tasa 0,6 para ganar menos de 1/0,6 en área),
+  modulación por posición de punto (desplazamientos por debajo de 1 píxel de
+  cámara), compresores de mezcla de contextos (paq8px/cmix: 30-45 % mejores en
+  texto, pero con coma flotante, formato cambiante entre versiones, GB de RAM y sin
+  versión para navegador).
+
+### 9.2 Decisiones del formato
+
+* **Bloques**: la hoja se divide en 1, 2 (mitades) o 4 (2×2) bloques independientes,
+  cada uno con sus finders, marcadores y 4 copias de una cabecera de 64 bytes
+  (RS(255,64)). Encima de cada bloque, la etiqueta legible "3·B" y una miniatura de
+  la hoja con el bloque marcado. Margen 6 mm, separación 5 mm, banda de texto 8 mm.
+* **LDPC IRA** (repeat-accumulate, como DVB-S2): codificación en tiempo lineal y
+  construcción descrita en 5 líneas de la hoja de especificación. Palabras de hasta
+  16 384 bits; tasas 0,85 / 0,75 / 0,62 / 0,50 (L/M/H/X).
+* **Intercalado**: bit i de la palabra b en la celda ((i·S) mod N)·nb + b con S ≈ 0,618·N.
+  Sin la permutación, la paridad de todas las palabras (bits de grado 2, los más
+  débiles) caía en el cuarto inferior del bloque, que en una foto es la zona más
+  borrosa: palabras que no convergían con un 0,09 % de BER.
+* **LLR normalizada por zona** (salida / mediana): el modelo gaussiano saturaba casi
+  todos los bits al máximo y el decodificador perdía el orden de confianza.
+* **Lector**: hipótesis de geometría con 4, 3 o 2 finders; cada lado del
+  cuadrilátero se mide con el tamaño de celda de sus propios finders (la perspectiva
+  hace que los lejanos se vean un 15 % más pequeños); se descartan los
+  cuadriláteros que contienen finders de otros bloques; criba rápida de
+  hipótesis y vía rápida si casi todos los marcadores encajan. Un bloque v2 de
+  0,17 mm y una hoja v1 de 0,34 mm tienen casi la misma retícula: decide la
+  cabecera.
+* **Rendimiento**: unos 2-3 s por foto en nativo y unos 7 s en el navegador
+  (Pyodide). En el navegador el coste estaba en los mínimos cuadrados (numpy sin
+  BLAS optimizado): se ajusta con una muestra de 1 500 celdas por zona.
+* **Compresión**: el mejor de zstd-19, xz (con tres ajustes de lc/lp/pb), brotli-11
+  y bzip2-9. Todos están en Pyodide. PPMd ganaría otro 10 % en texto, pero no está en
+  Pyodide.
+
+### 9.3 Pendiente
+
+* **Validar con fotos reales** de varios móviles. El simulador no modela el
+  procesado de imagen del teléfono (enfoque artificial, reducción de ruido, HEIC).
+  Una foto real de un ticket (iPhone 16, 12 MP) daba un borde con σ ≈ 3-3,5 px, así
+  que el desenfoque real podría estar entre 2 y 3,5 px: justo la zona donde el
+  ecualizador marca la diferencia y donde el perfil de 0,13 mm deja de leerse.
+* Captura en vivo con disparo automático (`getUserMedia`) cuando se confirme que
+  Safari entrega 4K.
+* PPMd compilado a WebAssembly (otro 10-20 % en texto) y manifiesto binario
+  (unos 165 B por backup).
