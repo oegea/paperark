@@ -5,9 +5,10 @@ a partir de escaneos, aunque las hojas estén amarillentas, giradas, manchadas,
 con esquinas arrancadas o falten hojas enteras.
 
 * **Densidad (formato 2)**: la hoja se divide en **4 bloques** que se fotografían
-  de cerca, uno a uno, guiados por la pantalla: **~157 KB por A4 con el móvil**
-  (celda de 0,17 mm; hasta 282 KB con 0,13 mm), 4,5 veces más que la hoja entera
-  del formato 1 (35 KB). Con escáner, ~300 KB por hoja. Ver [la investigación](#por-qué-cabe-tanto).
+  de cerca, uno a uno, guiados por la pantalla: **~99 KB por A4 con el móvil**
+  (celda de 0,21 mm, casi 3 veces la hoja entera del formato 1, 35 KB). Con una
+  buena impresora láser, 157 KB (0,17 mm) o incluso 282 KB (0,13 mm): con tóner
+  compatible las celdas más finas acumulan defectos de impresión. Con escáner, ~300 KB por hoja. Ver [la investigación](#por-qué-cabe-tanto).
 * **Lector con ecualización y LDPC**: el lector deshace el emborronado de la
   cámara entre celdas vecinas (ecualizador 2D ajustado con las celdas conocidas
   y sus propias decisiones) y da una fiabilidad a cada bit; los datos llevan
@@ -93,7 +94,7 @@ python3 -m venv .venv && .venv/bin/pip install -r requirements.txt
 .venv/bin/python -m paperark decode escaneos/*.png -o restaurado/
 
 # cuántas hojas ocupará
-.venv/bin/python -m paperark estimate 5000000 --blocks 4 --cell 4 --ecc M --parity 8
+.venv/bin/python -m paperark estimate 5000000 --blocks 4 --cell 5 --ecc M --parity 8
 
 # interfaz web (escritorio y móvil en la misma red; imprime la URL para el móvil)
 .venv/bin/python -m paperark serve

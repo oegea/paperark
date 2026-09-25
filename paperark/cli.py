@@ -26,7 +26,7 @@ def main(argv=None):
     e.add_argument("--paper", choices=list(PAPERS), default="A4")
     e.add_argument("--blocks", type=int, choices=[0, 1, 2, 4], default=4,
                    help="bloques por hoja (formato 2; una foto de cerca por bloque). 0 = formato 1 (hoja completa, Reed-Solomon)")
-    e.add_argument("--cell", type=int, choices=sorted(set(CELL_SIZES) | set(V2_CELL_SIZES)), default=4, help="tamaño de celda en px @600dpi")
+    e.add_argument("--cell", type=int, choices=sorted(set(CELL_SIZES) | set(V2_CELL_SIZES)), default=5, help="tamaño de celda en px @600dpi")
     e.add_argument("--ecc", choices=list(ECC_LEVELS), default="M")
     e.add_argument("--parity", type=int, default=0,
                    help="páginas (formato 1) o bloques (formato 2) de paridad por grupo: recupera cualquier N perdidos")
@@ -47,7 +47,7 @@ def main(argv=None):
     s.add_argument("size", type=int)
     s.add_argument("--paper", choices=list(PAPERS), default="A4")
     s.add_argument("--blocks", type=int, choices=[0, 1, 2, 4], default=4)
-    s.add_argument("--cell", type=int, choices=sorted(set(CELL_SIZES) | set(V2_CELL_SIZES)), default=4)
+    s.add_argument("--cell", type=int, choices=sorted(set(CELL_SIZES) | set(V2_CELL_SIZES)), default=5)
     s.add_argument("--ecc", choices=list(ECC_LEVELS), default="M")
     s.add_argument("--parity", type=int, default=0)
 
